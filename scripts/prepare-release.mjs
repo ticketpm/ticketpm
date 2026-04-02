@@ -5,8 +5,8 @@ import process from "node:process";
 const rootDir = process.cwd();
 const packagesDir = path.join(rootDir, "packages");
 const releaseDir = path.join(rootDir, ".release");
-const repoUrl = "https://github.com/ticketpm/packages.git";
-const repoHttpUrl = "https://github.com/ticketpm/packages";
+const repoUrl = "https://github.com/ticketpm/ticketpm.git";
+const repoHttpUrl = "https://github.com/ticketpm/ticketpm";
 const packageOrder = ["core", "discord-api", "discordjs"];
 
 function readJson(filePath) {

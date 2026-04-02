@@ -7,13 +7,13 @@
 	"sideEffects": false,
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/ticketpm/packages.git",
+		"url": "https://github.com/ticketpm/ticketpm.git",
 		"directory": "packages/discord-api"
 	},
 	"bugs": {
-		"url": "https://github.com/ticketpm/packages/issues"
+		"url": "https://github.com/ticketpm/ticketpm/issues"
 	},
-	"homepage": "https://github.com/ticketpm/packages/tree/main/packages/discord-api#readme",
+	"homepage": "https://github.com/ticketpm/ticketpm/tree/main/packages/discord-api#readme",
 	"publishConfig": {
 		"access": "public",
 		"provenance": true

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository == 'ticketpm/packages'
+    if: github.repository == 'ticketpm/ticketpm'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
