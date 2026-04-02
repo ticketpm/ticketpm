@@ -56,4 +56,39 @@ describe("@ticketpm/core runtime", () => {
 			expect.any(Function)
 		);
 	});
+
+	it("normalizes ArrayBuffer results returned by Bun compression", async () => {
+		const bunCompress = vi
+			.spyOn(Bun, "zstdCompress")
+			// @ts-expect-error Bun's type narrows the return value more than the runtime helper accepts.
+			.mockImplementation(async () => Uint8Array.from([5, 4, 3]).buffer as unknown as Uint8Array);
+
+		const { compressBytesZstd } = await import("../src/index.js");
+		const result = await compressBytesZstd(new Uint8Array([1, 2, 3]));
+
+		expect(result).toBeInstanceOf(Uint8Array);
+		expect(Array.from(result)).toEqual([5, 4, 3]);
+		expect(bunCompress).toHaveBeenCalledWith(expect.any(Uint8Array), {
+			level: 15,
+			runtime: undefined
+		});
+	});
+
+	it("rejects when node:zlib compression fails", async () => {
+		vi.doMock("node:zlib", () => ({
+			zstdCompress: vi.fn(
+				(_input: Uint8Array, _options: { level?: number } | undefined, callback: (error: Error) => void) => {
+					callback(new Error("node zstd failed"));
+				}
+			)
+		}));
+
+		const { compressBytesZstd } = await import("../src/index.js");
+
+		await expect(
+			compressBytesZstd(new Uint8Array([1, 2, 3]), {
+				runtime: "node"
+			})
+		).rejects.toThrow("node zstd failed");
+	});
 });
