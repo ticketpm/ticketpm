@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -18,8 +19,23 @@ function run(command, args, cwd) {
 	}
 }
 
+async function isVersionPublished(manifestPath) {
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	const response = await fetch(`https://jsr.io/${manifest.name}/${manifest.version}_meta.json`, {
+		method: "HEAD"
+	});
+
+	return response.ok;
+}
+
 for (const slug of packageOrder) {
 	const packageDir = path.join(releaseRoot, slug);
+	const manifestPath = path.join(packageDir, "package.json");
+
+	if (await isVersionPublished(manifestPath)) {
+		console.log(`Skipping ${slug}; this JSR version is already published.`);
+		continue;
+	}
 
 	console.log(`Dry-running JSR publish for ${slug}.`);
 	run("npx", ["jsr", "publish", "--dry-run", "--allow-dirty"], packageDir);

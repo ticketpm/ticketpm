@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -61,6 +61,41 @@ function copyIfPresent(sourcePath, targetPath) {
 	}
 
 	cpSync(sourcePath, targetPath, { recursive: true });
+}
+
+function jsrSpecifier(packageName, version) {
+	return `jsr:${packageName}@${version}`;
+}
+
+function rewriteJsrSourceImports(sourceDir, releaseVersion) {
+	if (!existsSync(sourceDir)) {
+		return;
+	}
+
+	for (const entry of readdirSync(sourceDir)) {
+		const entryPath = path.join(sourceDir, entry);
+		const stats = statSync(entryPath);
+
+		if (stats.isDirectory()) {
+			rewriteJsrSourceImports(entryPath, releaseVersion);
+			continue;
+		}
+
+		if (!entryPath.endsWith(".ts")) {
+			continue;
+		}
+
+		let source = readFileSync(entryPath, "utf8");
+		source = source.replaceAll(
+			/"@ticketpm\/([^"]+)"/g,
+			(_, packageSlug) => `"${jsrSpecifier(`@ticketpm/${packageSlug}`, releaseVersion)}"`
+		);
+		source = source.replaceAll(
+			/'@ticketpm\/([^']+)'/g,
+			(_, packageSlug) => `'${jsrSpecifier(`@ticketpm/${packageSlug}`, releaseVersion)}'`
+		);
+		writeFileSync(entryPath, source);
+	}
 }
 
 function packageMetadata(pkg) {
@@ -142,6 +177,7 @@ for (const pkg of packages) {
 	copyIfPresent(path.join(pkg.dir, "src"), path.join(jsrTargetDir, "src"));
 	copyIfPresent(path.join(pkg.dir, "README.md"), path.join(jsrTargetDir, "README.md"));
 	copyIfPresent(path.join(rootDir, "LICENSE"), path.join(jsrTargetDir, "LICENSE"));
+	rewriteJsrSourceImports(path.join(jsrTargetDir, "src"), releaseVersion);
 
 	const jsrDependencies = {
 		...(rewriteInternalDependencies(pkg.manifest.dependencies, releaseVersion, "jsr") ?? {}),
