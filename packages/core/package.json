@@ -1,0 +1,25 @@
+{
+	"name": "@ticketpm/core",
+	"version": "0.0.1",
+	"description": "Core transcript tooling for ticket.pm uploads.",
+	"license": "MPL-2.0",
+	"type": "module",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "bun --bun tsc -p tsconfig.build.json",
+		"test": "bun --bun vitest run"
+	}
+}
