@@ -1,0 +1,5 @@
+node_modules
+bun.lock
+packages/*/dist
+coverage
+*.tsbuildinfo

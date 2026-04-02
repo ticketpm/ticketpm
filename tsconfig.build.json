@@ -1,0 +1,8 @@
+{
+	"files": [],
+	"references": [
+		{ "path": "./packages/core/tsconfig.build.json" },
+		{ "path": "./packages/discord-api/tsconfig.build.json" },
+		{ "path": "./packages/discordjs/tsconfig.build.json" }
+	]
+}

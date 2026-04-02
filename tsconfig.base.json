@@ -1,0 +1,29 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"strict": true,
+		"noImplicitOverride": true,
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": false,
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true,
+		"composite": true,
+		"incremental": true,
+		"isolatedModules": true,
+		"noEmit": true,
+		"ignoreDeprecations": "6.0",
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true,
+		"types": ["bun-types", "node"],
+		"baseUrl": ".",
+		"paths": {
+			"@ticketpm/core": ["./packages/core/src/index.ts"],
+			"@ticketpm/discord-api": ["./packages/discord-api/src/index.ts"],
+			"@ticketpm/discordjs": ["./packages/discordjs/src/index.ts"]
+		}
+	}
+}
