@@ -5,8 +5,18 @@
 	"license": "MPL-2.0",
 	"type": "module",
 	"sideEffects": false,
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/ticketpm/packages.git",
+		"directory": "packages/discordjs"
+	},
+	"bugs": {
+		"url": "https://github.com/ticketpm/packages/issues"
+	},
+	"homepage": "https://github.com/ticketpm/packages/tree/main/packages/discordjs#readme",
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"provenance": true
 	},
 	"files": [
 		"dist",

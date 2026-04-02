@@ -3,3 +3,4 @@ bun.lock
 packages/*/dist
 coverage
 *.tsbuildinfo
+.release
