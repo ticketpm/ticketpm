@@ -3,7 +3,6 @@
 	"compilerOptions": {
 		"tsBuildInfoFile": "node_modules/.cache/discord-api.tsbuildinfo"
 	},
-	"references": [{ "path": "../core/tsconfig.build.json" }],
 	"include": ["src/**/*.ts", "test/**/*.ts"],
 	"exclude": ["dist"]
 }

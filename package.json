@@ -22,7 +22,7 @@
 		"release:publish:jsr": "bun scripts/publish-jsr.mjs",
 		"release:publish:npm": "bun scripts/publish-npm.mjs",
 		"test": "bun --bun vitest run",
-		"typecheck": "bun --bun tsc -p packages/core/tsconfig.json --pretty false && bun --bun tsc -p packages/discord-api/tsconfig.json --pretty false && bun --bun tsc -p packages/discordjs/tsconfig.json --pretty false"
+		"typecheck": "bun --bun tsc -p tsconfig.typecheck.json --pretty false"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.10",
