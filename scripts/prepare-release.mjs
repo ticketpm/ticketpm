@@ -180,12 +180,16 @@ for (const pkg of packages) {
 	rewriteJsrSourceImports(path.join(jsrTargetDir, "src"), releaseVersion);
 
 	const jsrDependencies = {
-		...(rewriteInternalDependencies(pkg.manifest.dependencies, releaseVersion, "jsr") ?? {}),
-		...(pkg.manifest.peerDependencies ?? {})
+		...(rewriteInternalDependencies(pkg.manifest.dependencies, releaseVersion, "jsr") ?? {})
 	};
 
-	if (pkg.slug === "discordjs" && pkg.manifest.devDependencies?.["discord.js"]) {
-		jsrDependencies["discord.js"] ??= pkg.manifest.devDependencies["discord.js"];
+	for (const [name, range] of Object.entries(pkg.manifest.peerDependencies ?? {})) {
+		if (name === "discord.js" && pkg.manifest.devDependencies?.["discord.js"]) {
+			jsrDependencies[name] = pkg.manifest.devDependencies["discord.js"];
+			continue;
+		}
+
+		jsrDependencies[name] = range;
 	}
 
 	const jsrManifest = {
