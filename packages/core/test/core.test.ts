@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	buildStoredTranscript,
 	ComponentType,
-	compressStoredTranscript,
 	collectTranscriptMediaUrls,
+	compressStoredTranscript,
 	type DiscordContext,
 	type DraftMessage,
 	MAX_TRANSCRIPT_CHANNEL_NAME_CHARACTERS,
@@ -16,10 +16,10 @@ import {
 	proxyTranscriptAssetsInPlace,
 	proxyTranscriptAvatarsInPlace,
 	rewriteTranscriptMediaUrlsInPlace,
+	type StoredTranscript,
 	stringifyCanonicalJson,
 	TicketPmMediaProxyClient,
 	TicketPmUploadClient,
-	type StoredTranscript,
 	type TranscriptBuildInput,
 	validateTicketPmUploadPayload,
 	validateTranscriptUrls,
@@ -338,8 +338,7 @@ describe("@ticketpm/core", () => {
 			errors: [
 				{
 					path: "context.channel_id",
-					message:
-						"Invalid transcript context: context.channels[context.channel_id].name must be less or equal to 100 characters"
+					message: "Invalid transcript context: context.channels[context.channel_id].name must be less or equal to 100 characters"
 				}
 			]
 		});

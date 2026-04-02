@@ -76,11 +76,9 @@ describe("@ticketpm/core runtime", () => {
 
 	it("rejects when node:zlib compression fails", async () => {
 		vi.doMock("node:zlib", () => ({
-			zstdCompress: vi.fn(
-				(_input: Uint8Array, _options: { level?: number } | undefined, callback: (error: Error) => void) => {
-					callback(new Error("node zstd failed"));
-				}
-			)
+			zstdCompress: vi.fn((_input: Uint8Array, _options: { level?: number } | undefined, callback: (error: Error) => void) => {
+				callback(new Error("node zstd failed"));
+			})
 		}));
 
 		const { compressBytesZstd } = await import("../src/index.js");
