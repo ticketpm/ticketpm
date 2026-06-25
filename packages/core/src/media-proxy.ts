@@ -120,6 +120,14 @@ export class TicketPmMediaProxyClient {
 		return this.options.baseUrl;
 	}
 
+	private async fetchUpload(path: string, init: RequestInit): Promise<Response | undefined> {
+		try {
+			return await this.fetchImpl(joinUrl(this.options.baseUrl, path), init);
+		} catch {
+			return undefined;
+		}
+	}
+
 	/**
 	 * Upload a Discord avatar hash to the configured media proxy.
 	 *
@@ -164,7 +172,7 @@ export class TicketPmMediaProxyClient {
 	}
 
 	private async uploadAvatarHashUncached(hash: string, userId: string): Promise<string | undefined> {
-		const response = await this.fetchImpl(joinUrl(this.options.baseUrl, "/avatars/upload"), {
+		const response = await this.fetchUpload("/avatars/upload", {
 			method: "POST",
 			headers: buildUploadHeaders({
 				contentType: "application/json",
@@ -173,7 +181,7 @@ export class TicketPmMediaProxyClient {
 			body: JSON.stringify({ hash, id: userId })
 		});
 
-		if (!response.ok) {
+		if (!response?.ok) {
 			return undefined;
 		}
 
@@ -229,7 +237,7 @@ export class TicketPmMediaProxyClient {
 		}
 
 		const request = (async () => {
-			const response = await this.fetchImpl(joinUrl(this.options.baseUrl, "/icons/upload"), {
+			const response = await this.fetchUpload("/icons/upload", {
 				method: "POST",
 				headers: buildUploadHeaders({
 					contentType: "application/json",
@@ -238,7 +246,7 @@ export class TicketPmMediaProxyClient {
 				body: JSON.stringify({ hash: normalizedHash, id: guildId })
 			});
 
-			if (!response.ok) {
+			if (!response?.ok) {
 				return undefined;
 			}
 
@@ -272,7 +280,7 @@ export class TicketPmMediaProxyClient {
 		}
 
 		const request = (async () => {
-			const response = await this.fetchImpl(joinUrl(this.options.baseUrl, "/attachments/upload"), {
+			const response = await this.fetchUpload("/attachments/upload", {
 				method: "POST",
 				headers: buildUploadHeaders({
 					contentType: "application/json",
@@ -281,7 +289,7 @@ export class TicketPmMediaProxyClient {
 				body: JSON.stringify({ url })
 			});
 
-			if (!response.ok) {
+			if (!response?.ok) {
 				return undefined;
 			}
 

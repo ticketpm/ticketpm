@@ -884,7 +884,7 @@ describe("@ticketpm/core", () => {
 		expect(Object.values(users).map((user) => user.avatar)).toEqual(["hash1", "hash2", "hash3", "hash4", "hash5"]);
 	});
 
-	it("propagates hard network failures during avatar proxy uploads", async () => {
+	it("continues avatar proxy uploads after hard network failures", async () => {
 		const fetchCalls: string[] = [];
 		const client = new TicketPmMediaProxyClient({
 			baseUrl: "https://m.ticket.pm/v2",
@@ -904,18 +904,16 @@ describe("@ticketpm/core", () => {
 				});
 			}) as typeof fetch
 		});
+		const users = {
+			u1: { id: "u1", username: "alice", avatar: "hash1" },
+			u2: { id: "u2", username: "bob", avatar: "hash2" },
+			u3: { id: "u3", username: "carol", avatar: "hash3" }
+		};
 
-		await expect(
-			proxyTranscriptAvatarsInPlace(
-				{
-					u1: { id: "u1", username: "alice", avatar: "hash1" },
-					u2: { id: "u2", username: "bob", avatar: "hash2" },
-					u3: { id: "u3", username: "carol", avatar: "hash3" }
-				},
-				client
-			)
-		).rejects.toThrow("fetch failed");
-		expect(fetchCalls).toEqual(["hash1", "hash2"]);
+		await proxyTranscriptAvatarsInPlace(users, client);
+
+		expect(fetchCalls).toEqual(["hash1", "hash2", "hash3"]);
+		expect(Object.values(users).map((user) => user.avatar)).toEqual(["hash1", "hash2", "hash3"]);
 	});
 
 	it("collects unique media URLs and skips invalid ones", () => {
@@ -1014,32 +1012,31 @@ describe("@ticketpm/core", () => {
 		expect(messages[0]?.embeds?.[0]?.author?.proxy_icon_url).toBe("https://m.ticket.pm/v2/attachments/hash-2");
 	});
 
-	it("propagates hard network failures during media rewrites", async () => {
+	it("leaves media URLs unchanged after hard network failures during media rewrites", async () => {
 		const client = new TicketPmMediaProxyClient({
 			baseUrl: "https://m.ticket.pm/v2",
 			fetch: (async () => {
 				throw new TypeError("fetch failed");
 			}) as unknown as typeof fetch
 		});
-
-		await expect(
-			rewriteTranscriptMediaUrlsInPlace(
-				[
+		const messages: DraftMessage[] = [
+			{
+				id: "m1",
+				attachments: [
 					{
-						id: "m1",
-						attachments: [
-							{
-								id: "a1",
-								filename: "file.png",
-								size: 1,
-								url: "https://cdn.discordapp.com/attachments/1/2/file.png"
-							}
-						]
+						id: "a1",
+						filename: "file.png",
+						size: 1,
+						url: "https://cdn.discordapp.com/attachments/1/2/file.png"
 					}
-				],
-				client
-			)
-		).rejects.toThrow("fetch failed");
+				]
+			}
+		];
+
+		await rewriteTranscriptMediaUrlsInPlace(messages, client);
+
+		expect(messages[0]?.attachments?.[0]?.url).toBe("https://cdn.discordapp.com/attachments/1/2/file.png");
+		expect(messages[0]?.attachments?.[0]?.proxy_url).toBeUndefined();
 	});
 
 	it("proxies guild icons with the animated flag when the source hash is animated", async () => {
