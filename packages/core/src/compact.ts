@@ -164,10 +164,9 @@ interface WebhookIdentityCandidate {
 function selectCompactWebhookContext(messages: readonly DraftMessage[], context: DiscordContext): DiscordContext {
 	const candidatesByUser = new Map<string, Map<string, WebhookIdentityCandidate>>();
 
-	for (const [messageIndex, message] of messages.entries()) {
-		const author = message.author;
+	const registerCandidate = (author: UserInfo | undefined, messageIndex: number): void => {
 		if (!author?.webhook) {
-			continue;
+			return;
 		}
 
 		const identityKey = userIdentityKey(author);
@@ -183,6 +182,11 @@ function selectCompactWebhookContext(messages: readonly DraftMessage[], context:
 			});
 		}
 		candidatesByUser.set(author.id, candidates);
+	};
+
+	for (const [messageIndex, message] of messages.entries()) {
+		registerCandidate(message.author, messageIndex);
+		registerCandidate(message.referenced_message?.author, messageIndex);
 	}
 
 	if (candidatesByUser.size === 0) {

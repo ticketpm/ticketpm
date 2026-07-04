@@ -205,7 +205,21 @@ describe("@ticketpm/core", () => {
 		expect(transcript.messages[1]?.author).toBeUndefined();
 	});
 
-	it("preserves referenced webhook identity variants inline", () => {
+	it("stores only minority referenced webhook identity variants inline", () => {
+		const commonReferencedAuthor = {
+			id: "webhook-1",
+			username: "Current name#0000",
+			display_name: "Current name",
+			avatar: "current-avatar",
+			bot: true,
+			webhook: true
+		};
+		const historicalReferencedAuthor = {
+			...commonReferencedAuthor,
+			username: "Historical name#0000",
+			display_name: "Historical name",
+			avatar: "historical-avatar"
+		};
 		const transcript = buildStoredTranscript({
 			context: {
 				channel_id: "c1",
@@ -215,9 +229,9 @@ describe("@ticketpm/core", () => {
 				users: {
 					"webhook-1": {
 						id: "webhook-1",
-						username: "Current name#0000",
-						display_name: "Current name",
-						avatar: "current-avatar",
+						username: "Stale context name#0000",
+						display_name: "Stale context name",
+						avatar: "stale-avatar",
 						bot: true,
 						webhook: true
 					}
@@ -229,25 +243,35 @@ describe("@ticketpm/core", () => {
 					content: "reply",
 					referenced_message: {
 						id: "original",
-						author: {
-							id: "webhook-1",
-							username: "Historical name#0000",
-							display_name: "Historical name",
-							avatar: "historical-avatar",
-							bot: true,
-							webhook: true
-						},
+						author: historicalReferencedAuthor,
 						content: "original"
+					}
+				},
+				{
+					id: "reply-2",
+					referenced_message: {
+						id: "common-original-1",
+						author: commonReferencedAuthor
+					}
+				},
+				{
+					id: "reply-3",
+					referenced_message: {
+						id: "common-original-2",
+						author: commonReferencedAuthor
 					}
 				}
 			]
 		});
 
+		expect(transcript.context?.users?.["webhook-1"]?.display_name).toBe("Current name");
 		expect(transcript.messages[0]?.referenced_message?.author).toMatchObject({
 			display_name: "Historical name",
 			avatar: "historical-avatar",
 			webhook: true
 		});
+		expect(transcript.messages[1]?.referenced_message?.author).toBeUndefined();
+		expect(transcript.messages[2]?.referenced_message?.author).toBeUndefined();
 		expect(validateViewerCompatibility(transcript).ok).toBe(true);
 	});
 
