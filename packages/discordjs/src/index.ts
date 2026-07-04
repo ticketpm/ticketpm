@@ -15,7 +15,8 @@ import {
 	type StoredTranscript,
 	sortMessagesChronologically,
 	type TranscriptBuildInput,
-	type UserInfo
+	type UserInfo,
+	type WebhookAuthorOptions
 } from "@ticketpm/core";
 import type { Collection, Guild, GuildMember, Message, MessageReaction, Role, User } from "discord.js";
 
@@ -75,7 +76,7 @@ function roleColorToHex(role: Role): string | undefined {
  * Convert a discord.js `User` into the transcript identity format used by the
  * core package.
  */
-export function discordJsUserToUserInfo(user: User, options?: { isWebhook?: boolean; applicationId?: string | null }): UserInfo {
+export function discordJsUserToUserInfo(user: User, options?: WebhookAuthorOptions): UserInfo {
 	const webhook = isWebhookAuthor(
 		{
 			bot: user.bot,
@@ -235,6 +236,7 @@ function discordJsMessageToDraftMessageInternal(message: Message<boolean>, seenM
 		channel_id: message.channelId,
 		author: discordJsUserToUserInfo(message.author, {
 			isWebhook: Boolean(message.webhookId),
+			isInteractionResponse: Boolean(message.interactionMetadata || message.interaction),
 			applicationId: message.applicationId ?? null
 		}),
 		timestamp: new Date(message.createdTimestamp).toISOString(),

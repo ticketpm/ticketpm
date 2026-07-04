@@ -487,7 +487,7 @@ export function validateViewerCompatibility(transcript: StoredTranscript): Uploa
 	for (const [index, message] of transcript.messages.entries()) {
 		const path = `messages[${index}]`;
 
-		if (message.author_id && !users?.[message.author_id]) {
+		if (message.author_id && !message.author && !users?.[message.author_id]) {
 			pushIssue(issues, `${path}.author_id`, "author cannot be hydrated from context.users");
 		}
 
@@ -503,7 +503,11 @@ export function validateViewerCompatibility(transcript: StoredTranscript): Uploa
 
 		validateInteractionMetadataHydration(message.interaction_metadata, users, `${path}.interaction_metadata`, issues);
 
-		if (message.referenced_message?.author_id && !users?.[message.referenced_message.author_id]) {
+		if (
+			message.referenced_message?.author_id &&
+			!message.referenced_message.author &&
+			!users?.[message.referenced_message.author_id]
+		) {
 			pushIssue(issues, `${path}.referenced_message.author_id`, "referenced author cannot be hydrated from context.users");
 		}
 

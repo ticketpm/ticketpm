@@ -540,6 +540,7 @@ export interface CompactReferencedMessage {
 	type?: number;
 	mention_everyone?: boolean;
 	author_id?: string;
+	author?: UserInfo;
 	content?: string;
 	interaction?: Pick<CompactMessageInteraction, "type">;
 	interaction_metadata?: Pick<CompactMessageInteractionMetadata, "type">;
@@ -553,6 +554,7 @@ export interface StoredCompactMessage {
 	type?: number;
 	timestamp?: string;
 	author_id?: string;
+	author?: UserInfo;
 	content?: string;
 	mention_everyone?: boolean;
 	edited_timestamp?: string | null;

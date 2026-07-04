@@ -12,7 +12,8 @@ import {
 	isWebhookAuthor,
 	type StoredTranscript,
 	sortMessagesChronologically,
-	type UserInfo
+	type UserInfo,
+	type WebhookAuthorOptions
 } from "@ticketpm/core";
 import type { APIChannel, APIGuildMember, APIMessage, APIRole, APIUser } from "discord-api-types/v10";
 
@@ -96,7 +97,7 @@ function roleColorToHex(color: number): string | undefined {
 	return color ? `#${color.toString(16).padStart(6, "0")}` : undefined;
 }
 
-function toUserInfo(user: APIUser, options?: { isWebhook?: boolean; applicationId?: string | null }): UserInfo {
+function toUserInfo(user: APIUser, options?: WebhookAuthorOptions): UserInfo {
 	const webhook = isWebhookAuthor(
 		{
 			bot: user.bot,
@@ -126,6 +127,10 @@ function toUserInfo(user: APIUser, options?: { isWebhook?: boolean; applicationI
 		avatar_decoration_data: user.avatar_decoration_data ?? null,
 		primary_guild: extendedUser.primary_guild ?? null
 	};
+}
+
+function isInteractionResponse(message: Pick<APIMessage, "interaction" | "interaction_metadata">): boolean {
+	return Boolean(message.interaction_metadata || message.interaction);
 }
 
 function normalizeInteractionMetadata(
@@ -214,6 +219,7 @@ function normalizeReferencedMessage(message: APIMessage): DraftMessage {
 		author: message.author
 			? toUserInfo(message.author, {
 					isWebhook: Boolean(message.webhook_id),
+					isInteractionResponse: isInteractionResponse(message),
 					applicationId: message.application_id ?? null
 				})
 			: undefined,
@@ -248,6 +254,7 @@ export function normalizeDiscordApiMessage(message: APIMessage): DraftMessage {
 		author: message.author
 			? toUserInfo(message.author, {
 					isWebhook: Boolean(message.webhook_id),
+					isInteractionResponse: isInteractionResponse(message),
 					applicationId: message.application_id ?? null
 				})
 			: undefined,

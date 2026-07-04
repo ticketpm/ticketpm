@@ -7,30 +7,151 @@ import {
 	normalizeDiscordApiMessage
 } from "../src/index.js";
 
+type DiscordApiMessage = Parameters<typeof normalizeDiscordApiMessage>[0];
+type DiscordApiMessageFixture = Pick<DiscordApiMessage, "author" | "channel_id" | "content" | "id" | "timestamp"> &
+	Partial<Omit<DiscordApiMessage, "author" | "channel_id" | "content" | "id" | "timestamp">>;
+
+function createDiscordApiMessage(fixture: DiscordApiMessageFixture): DiscordApiMessage {
+	return {
+		type: 0,
+		tts: false,
+		edited_timestamp: null,
+		mention_everyone: false,
+		mentions: [],
+		mention_roles: [],
+		attachments: [],
+		embeds: [],
+		reactions: [],
+		pinned: false,
+		...fixture
+	};
+}
+
 describe("@ticketpm/discord-api", () => {
 	it("normalizes webhook-like bot usernames for transcript export", () => {
-		const message = normalizeDiscordApiMessage({
-			id: "m1",
-			channel_id: "c1",
-			content: "hello",
-			timestamp: "2026-03-18T12:00:00.000Z",
-			author: {
-				id: "u1",
-				username: "relay",
-				discriminator: "1234",
-				avatar: null,
-				bot: true
-			},
-			application_id: null,
-			webhook_id: "wh1",
-			mentions: [],
-			attachments: [],
-			embeds: []
-		} as never);
+		const message = normalizeDiscordApiMessage(
+			createDiscordApiMessage({
+				id: "m1",
+				channel_id: "c1",
+				content: "hello",
+				timestamp: "2026-03-18T12:00:00.000Z",
+				author: {
+					id: "u1",
+					username: "relay",
+					discriminator: "1234",
+					global_name: null,
+					avatar: null,
+					bot: true
+				},
+				webhook_id: "wh1"
+			})
+		);
 
 		expect(message.author?.username).toBe("relay#1234");
 		expect(message.author?.display_name).toBe("relay");
 		expect(message.author?.webhook).toBe(true);
+	});
+
+	it("classifies application-owned channel webhooks as webhooks", () => {
+		const message = normalizeDiscordApiMessage(
+			createDiscordApiMessage({
+				id: "m1",
+				channel_id: "c1",
+				content: "hello",
+				timestamp: "2026-03-18T12:00:00.000Z",
+				author: {
+					id: "wh1",
+					username: "Support",
+					discriminator: "0000",
+					global_name: null,
+					avatar: "avatar-1",
+					bot: true
+				},
+				application_id: "app1",
+				webhook_id: "wh1"
+			})
+		);
+
+		expect(message.author?.webhook).toBe(true);
+	});
+
+	it("keeps interaction responses classified as app messages", () => {
+		const message = normalizeDiscordApiMessage(
+			createDiscordApiMessage({
+				id: "m1",
+				channel_id: "c1",
+				content: "hello",
+				timestamp: "2026-03-18T12:00:00.000Z",
+				author: {
+					id: "app1",
+					username: "Ticket Bot",
+					discriminator: "0000",
+					global_name: null,
+					avatar: "avatar-1",
+					bot: true
+				},
+				application_id: "app1",
+				webhook_id: "app1",
+				interaction_metadata: {
+					id: "interaction-1",
+					type: 2,
+					user: {
+						id: "u1",
+						username: "alice",
+						discriminator: "0",
+						global_name: null,
+						avatar: null
+					},
+					authorizing_integration_owners: {}
+				}
+			})
+		);
+
+		expect(message.author?.webhook).toBeUndefined();
+		expect(message.author?.bot).toBe(true);
+	});
+
+	it("preserves changed webhook identities without duplicating the common identity", () => {
+		const transcript = createDiscordApiTranscript({
+			messages: [
+				createDiscordApiMessage({
+					id: "m1",
+					channel_id: "c1",
+					content: "before",
+					timestamp: "2026-03-18T12:00:00.000Z",
+					author: {
+						id: "wh1",
+						username: "Support",
+						discriminator: "0000",
+						global_name: null,
+						avatar: "avatar-1",
+						bot: true
+					},
+					webhook_id: "wh1"
+				}),
+				...["m2", "m3"].map((id, index) =>
+					createDiscordApiMessage({
+						id,
+						channel_id: "c1",
+						content: "after",
+						timestamp: `2026-03-18T12:0${index + 1}:00.000Z`,
+						author: {
+							id: "wh1",
+							username: "Support Lead",
+							discriminator: "0000",
+							global_name: null,
+							avatar: "avatar-2",
+							bot: true
+						},
+						webhook_id: "wh1"
+					})
+				)
+			]
+		});
+
+		expect(transcript.context?.users?.wh1?.display_name).toBe("Support Lead");
+		expect(transcript.messages.filter((message) => message.author).map((message) => message.id)).toEqual(["m1"]);
+		expect(transcript.messages[0]?.author?.display_name).toBe("Support");
 	});
 
 	it("creates a compact transcript from raw API payloads", () => {
