@@ -154,6 +154,127 @@ describe("@ticketpm/core", () => {
 		expect(validateViewerCompatibility(transcript).ok).toBe(false);
 	});
 
+	it("stores only minority webhook identity variants inline", () => {
+		const originalAuthor = {
+			id: "webhook-1",
+			username: "Support #1#0000",
+			display_name: "Support #1",
+			avatar: "yellow-avatar",
+			bot: true,
+			webhook: true
+		};
+		const renamedAuthor = {
+			...originalAuthor,
+			username: "Support Lead #1#0000",
+			display_name: "Support Lead #1",
+			avatar: "orange-avatar"
+		};
+		const messages: DraftMessage[] = [
+			{
+				id: "m0",
+				author: originalAuthor,
+				content: "before rename"
+			},
+			...Array.from({ length: 999 }, (_, index) => ({
+				id: `m${index + 1}`,
+				author: renamedAuthor,
+				content: "after rename"
+			}))
+		];
+
+		const transcript = buildStoredTranscript({
+			context: {
+				channel_id: "c1",
+				channels: {
+					c1: { name: "support" }
+				},
+				users: {
+					[originalAuthor.id]: originalAuthor
+				}
+			},
+			messages
+		});
+
+		expect(transcript.context?.users?.[originalAuthor.id]?.display_name).toBe("Support Lead #1");
+		expect(transcript.messages.filter((message) => message.author).map((message) => message.id)).toEqual(["m0"]);
+		expect(transcript.messages[0]?.author).toMatchObject({
+			display_name: "Support #1",
+			avatar: "yellow-avatar",
+			webhook: true
+		});
+		expect(transcript.messages[1]?.author).toBeUndefined();
+	});
+
+	it("stores only minority referenced webhook identity variants inline", () => {
+		const commonReferencedAuthor = {
+			id: "webhook-1",
+			username: "Current name#0000",
+			display_name: "Current name",
+			avatar: "current-avatar",
+			bot: true,
+			webhook: true
+		};
+		const historicalReferencedAuthor = {
+			...commonReferencedAuthor,
+			username: "Historical name#0000",
+			display_name: "Historical name",
+			avatar: "historical-avatar"
+		};
+		const transcript = buildStoredTranscript({
+			context: {
+				channel_id: "c1",
+				channels: {
+					c1: { name: "support" }
+				},
+				users: {
+					"webhook-1": {
+						id: "webhook-1",
+						username: "Stale context name#0000",
+						display_name: "Stale context name",
+						avatar: "stale-avatar",
+						bot: true,
+						webhook: true
+					}
+				}
+			},
+			messages: [
+				{
+					id: "reply",
+					content: "reply",
+					referenced_message: {
+						id: "original",
+						author: historicalReferencedAuthor,
+						content: "original"
+					}
+				},
+				{
+					id: "reply-2",
+					referenced_message: {
+						id: "common-original-1",
+						author: commonReferencedAuthor
+					}
+				},
+				{
+					id: "reply-3",
+					referenced_message: {
+						id: "common-original-2",
+						author: commonReferencedAuthor
+					}
+				}
+			]
+		});
+
+		expect(transcript.context?.users?.["webhook-1"]?.display_name).toBe("Current name");
+		expect(transcript.messages[0]?.referenced_message?.author).toMatchObject({
+			display_name: "Historical name",
+			avatar: "historical-avatar",
+			webhook: true
+		});
+		expect(transcript.messages[1]?.referenced_message?.author).toBeUndefined();
+		expect(transcript.messages[2]?.referenced_message?.author).toBeUndefined();
+		expect(validateViewerCompatibility(transcript).ok).toBe(true);
+	});
+
 	it("serializes canonically regardless of object insertion order", () => {
 		const left = stringifyCanonicalJson({
 			z: 1,
@@ -654,6 +775,86 @@ describe("@ticketpm/core", () => {
 			[0, 2],
 			[1, 2],
 			[2, 2]
+		]);
+	});
+
+	it("proxies every avatar variant used by a webhook", async () => {
+		const fetchBodies: string[] = [];
+		const progressUpdates: Array<[number, number]> = [];
+		const client = new TicketPmMediaProxyClient({
+			baseUrl: "https://m.ticket.pm/v2",
+			fetch: (async (_input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
+				fetchBodies.push(String(init?.body ?? ""));
+				return new Response(JSON.stringify({ hash: "cached-avatar" }), {
+					status: 200,
+					headers: {
+						"Content-Type": "application/json"
+					}
+				});
+			}) as typeof fetch
+		});
+		const transcript: { context: DiscordContext; messages: DraftMessage[] } = {
+			context: {
+				users: {
+					"webhook-1": {
+						id: "webhook-1",
+						username: "Support#0000",
+						avatar: "avatar_old",
+						bot: true,
+						webhook: true
+					}
+				}
+			},
+			messages: [
+				{
+					id: "m1",
+					author: {
+						id: "webhook-1",
+						username: "Support#0000",
+						avatar: "avatar_old",
+						bot: true,
+						webhook: true
+					}
+				},
+				{
+					id: "m2",
+					author: {
+						id: "webhook-1",
+						username: "Support Lead#0000",
+						avatar: "avatar_new",
+						bot: true,
+						webhook: true
+					},
+					referenced_message: {
+						id: "referenced",
+						author: {
+							id: "webhook-1",
+							username: "Sender#0000",
+							avatar: "avatar_referenced",
+							bot: true,
+							webhook: true
+						}
+					}
+				}
+			]
+		};
+
+		await proxyTranscriptAssetsInPlace(transcript, client, {
+			avatarProgress: (completed, total) => {
+				progressUpdates.push([completed, total]);
+			}
+		});
+
+		expect(fetchBodies).toEqual([
+			JSON.stringify({ hash: "avatar_old", id: "webhook-1" }),
+			JSON.stringify({ hash: "avatar_new", id: "webhook-1" }),
+			JSON.stringify({ hash: "avatar_referenced", id: "webhook-1" })
+		]);
+		expect(progressUpdates).toEqual([
+			[0, 3],
+			[1, 3],
+			[2, 3],
+			[3, 3]
 		]);
 	});
 

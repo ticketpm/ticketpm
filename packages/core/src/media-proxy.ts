@@ -379,9 +379,17 @@ export async function proxyTranscriptAvatarsInPlace(
 	client: TicketPmMediaProxyClient,
 	options?: { onProgress?: UploadProgressCallback; userIds?: ReadonlySet<string> }
 ): Promise<void> {
+	return proxyUserAvatars(Object.values(users), client, options);
+}
+
+async function proxyUserAvatars(
+	users: Iterable<UserInfo>,
+	client: TicketPmMediaProxyClient,
+	options?: { onProgress?: UploadProgressCallback; userIds?: ReadonlySet<string> }
+): Promise<void> {
 	const uploads = new Map<string, AvatarUpload>();
 
-	for (const user of Object.values(users)) {
+	for (const user of users) {
 		if (options?.userIds && !options.userIds.has(user.id)) {
 			continue;
 		}
@@ -408,47 +416,58 @@ export async function proxyTranscriptAvatarsInPlace(
 	}
 }
 
-function collectInteractionMetadataUserIds(metadata: DraftMessage["interaction_metadata"], userIds: Set<string>): void {
+function collectInteractionMetadataUsers(metadata: DraftMessage["interaction_metadata"], users: UserInfo[]): void {
 	if (!metadata) {
 		return;
 	}
 
-	userIds.add(metadata.user.id);
-	collectInteractionMetadataUserIds(metadata.triggering_interaction_metadata, userIds);
+	users.push(metadata.user);
+	collectInteractionMetadataUsers(metadata.triggering_interaction_metadata, users);
 }
 
-function collectMessageUserIds(message: DraftMessage, userIds: Set<string>): void {
+function collectMessageUsers(message: DraftMessage, users: UserInfo[]): void {
 	if (message.author) {
-		userIds.add(message.author.id);
+		users.push(message.author);
 	}
 
 	for (const mention of message.mentions ?? []) {
-		userIds.add(mention.id);
+		users.push(mention);
 	}
 
 	if (message.interaction) {
-		userIds.add(message.interaction.user.id);
+		users.push(message.interaction.user);
 	}
 
-	collectInteractionMetadataUserIds(message.interaction_metadata, userIds);
+	collectInteractionMetadataUsers(message.interaction_metadata, users);
 
 	for (const voters of Object.values(message.poll?.answer_voters ?? {})) {
 		for (const voter of voters) {
-			userIds.add(voter.id);
+			users.push(voter);
 		}
 	}
 
 	if (message.referenced_message) {
-		collectMessageUserIds(message.referenced_message, userIds);
+		collectMessageUsers(message.referenced_message, users);
 	}
 }
 
-function collectTranscriptUserIds(messages: readonly DraftMessage[]): Set<string> {
-	const userIds = new Set<string>();
+function collectTranscriptUsers(
+	messages: readonly DraftMessage[],
+	contextUsers: Record<string, UserInfo> | undefined
+): UserInfo[] {
+	const users: UserInfo[] = [];
 	for (const message of messages) {
-		collectMessageUserIds(message, userIds);
+		collectMessageUsers(message, users);
 	}
-	return userIds;
+
+	const referencedUserIds = new Set(users.map((user) => user.id));
+	for (const contextUser of Object.values(contextUsers ?? {})) {
+		if (referencedUserIds.has(contextUser.id)) {
+			users.push(contextUser);
+		}
+	}
+
+	return users;
 }
 
 /**
@@ -556,12 +575,9 @@ export async function proxyTranscriptAssetsInPlace(
 		mediaProgress?: UploadProgressCallback;
 	}
 ): Promise<void> {
-	if (transcript.context.users) {
-		await proxyTranscriptAvatarsInPlace(transcript.context.users, client, {
-			onProgress: options?.avatarProgress,
-			userIds: collectTranscriptUserIds(transcript.messages)
-		});
-	}
+	await proxyUserAvatars(collectTranscriptUsers(transcript.messages, transcript.context.users), client, {
+		onProgress: options?.avatarProgress
+	});
 
 	if (transcript.context.guild) {
 		await proxyGuildIconInPlace(transcript.context.guild, client);

@@ -119,7 +119,8 @@ You only need to implement the callbacks your export flow actually needs.
 
 - `createDiscordApiTranscript()` and `createEnrichedDiscordApiTranscript()` always sort messages chronologically before compact export.
 - `buildDiscordApiContext()` preserves existing `baseContext` entries instead of overwriting them with newly normalized values.
-- Webhook-like bot authors are normalized the same way as the first-party exporter, including webhook identity flags.
+- Messages with `webhook_id` are normalized as webhooks unless they contain interaction metadata. This preserves application-owned channel webhooks while keeping command and component responses classified as app messages.
+- Per-message webhook username and avatar overrides are preserved through core compaction. The most common identity stays in shared context so persistent renames do not duplicate author data across every message.
 - Mentioned channels are stored using transcript channel types like `text`, `voice`, `thread`, and `stage`.
 - When the enricher resolves the current thread channel, the parent channel is fetched as well when `parent_id` is present.
 - Guild member role lists are filtered to roles that were actually resolved through `fetchGuildRoles()`.

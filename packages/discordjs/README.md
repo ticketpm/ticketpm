@@ -118,7 +118,8 @@ const transcript = createDiscordJsTranscript({
 - Passing `guild` adds guild metadata such as `name`, `icon`, `icon_url`, `approximate_member_count`, `owner_id`, and `vanity_url_code`, and can provide cached member roles for transcript participants.
 - Passing `channel` and `parentChannel` lets the transcript preserve thread and parent-channel relationships.
 - Message references, attachments, embeds, reactions, components, stickers, and polls are all normalized from the discord.js message object when present.
-- Webhook-backed messages are normalized with webhook-aware author formatting to stay consistent with the main exporter.
+- Messages with `webhookId` are normalized as webhooks unless they contain interaction metadata. This preserves application-owned channel webhooks while keeping interaction responses classified as app messages.
+- Per-message webhook username and avatar overrides are preserved through core compaction. The most common identity stays in shared context so persistent renames do not duplicate author data across every message.
 
 ## Pagination details
 

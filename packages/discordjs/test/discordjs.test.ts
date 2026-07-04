@@ -75,6 +75,49 @@ describe("@ticketpm/discordjs", () => {
 		expect(message.content).toBe("hello");
 	});
 
+	it("classifies application-owned channel webhooks as webhooks", () => {
+		const rawMessage = createMockMessage();
+		Object.assign(rawMessage, {
+			webhookId: "wh1",
+			applicationId: "app1",
+			interactionMetadata: null,
+			interaction: null,
+			author: {
+				id: "wh1",
+				bot: true,
+				username: "Support",
+				avatar: "avatar-1",
+				discriminator: "0000",
+				avatarURL: () => null
+			}
+		});
+
+		expect(discordJsMessageToDraftMessage(rawMessage).author?.webhook).toBe(true);
+	});
+
+	it("keeps interaction responses classified as app messages", () => {
+		const rawMessage = createMockMessage();
+		Object.assign(rawMessage, {
+			webhookId: "app1",
+			applicationId: "app1",
+			interactionMetadata: {
+				id: "interaction-1"
+			},
+			author: {
+				id: "app1",
+				bot: true,
+				username: "Ticket Bot",
+				avatar: "avatar-1",
+				discriminator: "0000",
+				avatarURL: () => null
+			}
+		});
+
+		const message = discordJsMessageToDraftMessage(rawMessage);
+		expect(message.author?.webhook).toBeUndefined();
+		expect(message.author?.bot).toBe(true);
+	});
+
 	it("uses a cached referenced message for reply draft references", () => {
 		const reply = createMockMessage();
 		const referenced = createMockMessage();

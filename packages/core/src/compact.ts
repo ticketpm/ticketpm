@@ -1,3 +1,4 @@
+import { stringifyCanonicalJson } from "./canonical.js";
 import type {
 	APIPoll,
 	APIPollVoter,
@@ -67,11 +68,41 @@ function compactPoll(poll: APIPoll | undefined): APIPoll | undefined {
 	};
 }
 
-function compactReferencedMessage(message: DraftMessage): CompactReferencedMessage {
+function compactUserIdentity(user: UserInfo): UserInfo {
+	return (
+		(pruneForExport(user) as UserInfo | undefined) ?? {
+			id: user.id,
+			username: user.username
+		}
+	);
+}
+
+function userIdentityKey(user: UserInfo): string {
+	return stringifyCanonicalJson(compactUserIdentity(user));
+}
+
+function compactWebhookAuthorOverride(
+	author: UserInfo | undefined,
+	users: Record<string, UserInfo> | undefined
+): UserInfo | undefined {
+	if (!author?.webhook) {
+		return undefined;
+	}
+
+	const contextAuthor = users?.[author.id];
+	if (contextAuthor && userIdentityKey(author) === userIdentityKey(contextAuthor)) {
+		return undefined;
+	}
+
+	return compactUserIdentity(author);
+}
+
+function compactReferencedMessage(message: DraftMessage, users: Record<string, UserInfo> | undefined): CompactReferencedMessage {
 	return {
 		id: message.id,
 		type: message.type,
 		author_id: message.author?.id,
+		author: compactWebhookAuthorOverride(message.author, users),
 		content: message.content,
 		mention_everyone: message.mention_everyone || undefined,
 		interaction: message.interaction ? { type: message.interaction.type } : undefined,
@@ -91,12 +122,13 @@ function compactMessageSnapshot(snapshot: DraftMessageSnapshot): DraftMessageSna
 	};
 }
 
-function compactMessage(message: DraftMessage): StoredCompactMessage {
+function compactMessage(message: DraftMessage, users: Record<string, UserInfo> | undefined): StoredCompactMessage {
 	return {
 		id: message.id,
 		type: message.type,
 		timestamp: message.timestamp,
 		author_id: message.author?.id,
+		author: compactWebhookAuthorOverride(message.author, users),
 		content: message.content,
 		mention_everyone: message.mention_everyone || undefined,
 		edited_timestamp: message.edited_timestamp,
@@ -111,10 +143,77 @@ function compactMessage(message: DraftMessage): StoredCompactMessage {
 		message_reference: message.message_reference,
 		message_snapshots: message.message_snapshots?.map(compactMessageSnapshot),
 		referenced_message: message.referenced_message
-			? compactReferencedMessage(message.referenced_message)
+			? compactReferencedMessage(message.referenced_message, users)
 			: message.referenced_message,
 		mention_ids: message.mentions?.map((user) => user.id),
 		mention_roles: message.mention_roles
+	};
+}
+
+interface WebhookIdentityCandidate {
+	count: number;
+	firstMessageIndex: number;
+	user: UserInfo;
+}
+
+/**
+ * Choose the most common identity for each webhook as its shared context
+ * entry. Only less-common username/avatar variants then need inline snapshots,
+ * keeping long webhook-heavy transcripts compact after a rename.
+ */
+function selectCompactWebhookContext(messages: readonly DraftMessage[], context: DiscordContext): DiscordContext {
+	const candidatesByUser = new Map<string, Map<string, WebhookIdentityCandidate>>();
+
+	const registerCandidate = (author: UserInfo | undefined, messageIndex: number): void => {
+		if (!author?.webhook) {
+			return;
+		}
+
+		const identityKey = userIdentityKey(author);
+		const candidates = candidatesByUser.get(author.id) ?? new Map<string, WebhookIdentityCandidate>();
+		const existing = candidates.get(identityKey);
+		if (existing) {
+			existing.count += 1;
+		} else {
+			candidates.set(identityKey, {
+				count: 1,
+				firstMessageIndex: messageIndex,
+				user: compactUserIdentity(author)
+			});
+		}
+		candidatesByUser.set(author.id, candidates);
+	};
+
+	for (const [messageIndex, message] of messages.entries()) {
+		registerCandidate(message.author, messageIndex);
+		registerCandidate(message.referenced_message?.author, messageIndex);
+	}
+
+	if (candidatesByUser.size === 0) {
+		return context;
+	}
+
+	const users = { ...(context.users ?? {}) };
+	for (const [userId, candidates] of candidatesByUser) {
+		let selected: WebhookIdentityCandidate | undefined;
+		for (const candidate of candidates.values()) {
+			if (
+				!selected ||
+				candidate.count > selected.count ||
+				(candidate.count === selected.count && candidate.firstMessageIndex < selected.firstMessageIndex)
+			) {
+				selected = candidate;
+			}
+		}
+
+		if (selected) {
+			users[userId] = selected.user;
+		}
+	}
+
+	return {
+		...context,
+		users
 	};
 }
 
@@ -187,9 +286,10 @@ export function sortTranscriptContext(context: DiscordContext): DiscordContext {
  * the viewer hydrates.
  */
 export function buildStoredTranscript(input: TranscriptBuildInput): StoredTranscript {
+	const compactContext = selectCompactWebhookContext(input.messages, input.context);
 	const compactTranscript: StoredTranscript = {
-		messages: input.messages.map(compactMessage),
-		context: sortTranscriptContext(input.context)
+		messages: input.messages.map((message) => compactMessage(message, compactContext.users)),
+		context: sortTranscriptContext(compactContext)
 	};
 
 	return (
