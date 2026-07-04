@@ -231,6 +231,7 @@ Most integrations follow this order:
 ### Transcript building
 
 - `buildStoredTranscript(input)` compacts a draft transcript into the viewer/upload format expected by `ticket.pm`.
+- Webhook authors normally use the shared `context.users` entry. When one webhook uses multiple usernames or avatars, the most common identity remains shared and only minority variants are stored inline on their messages.
 - `sortMessagesChronologically(messages)` sorts newest-first collections into stable oldest-first order.
 - `pruneForExport(value)` removes empty structures and nullish values using the same rules as the compact export path.
 
@@ -292,7 +293,8 @@ If the media proxy is down, the package falls back by not replacing the transcri
 `proxyTranscriptAvatarsInPlace()` uploads avatar hashes only as a cache/warm-up side effect.
 
 - `user.avatar` is never replaced with a proxy URL.
-- Draft transcript uploads only warm avatars for users referenced by draft messages.
+- Draft transcript uploads warm every distinct avatar hash used by referenced users, including per-message and referenced-message webhook identity variants.
+- Context-only users that are not referenced by any draft message are skipped.
 - Duplicate avatar hashes are uploaded once and counted once in progress.
 - Successfully uploaded avatar hashes are cached in memory by default, up to 50,000 hashes per client.
 - If avatar upload fails, the transcript is unchanged.
@@ -397,4 +399,5 @@ const uploadClient = new TicketPmUploadClient({
 - `context.channel_id` and `context.channels[context.channel_id].name` are required for upload compatibility.
 - Canonical JSON ordering matters because server-side dedupe hashes decompressed bytes, not semantic JSON.
 - Viewer compatibility is stricter than upload acceptance. A payload can upload successfully and still hydrate poorly if compact IDs are missing corresponding context entries.
+- Stored messages may include an inline `author` when a webhook identity differs from its shared context entry. This field is additive; transcripts using only `author_id` remain compatible.
 - `user.avatar` should stay a Discord avatar hash, not a proxy URL.
