@@ -1,6 +1,6 @@
 {
 	"name": "@ticketpm/core",
-	"version": "0.0.13",
+	"version": "0.0.14",
 	"description": "Core transcript tooling for ticket.pm uploads.",
 	"license": "MPL-2.0",
 	"type": "module",
