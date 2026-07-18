@@ -19,9 +19,9 @@ function run(command, args, cwd) {
 	}
 }
 
-async function isVersionPublished(manifestPath) {
-	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-	const response = await fetch(`https://jsr.io/${manifest.name}/${manifest.version}_meta.json`, {
+async function isVersionPublished(configPath) {
+	const config = JSON.parse(readFileSync(configPath, "utf8"));
+	const response = await fetch(`https://jsr.io/${config.name}/${config.version}_meta.json`, {
 		method: "HEAD"
 	});
 
@@ -30,9 +30,9 @@ async function isVersionPublished(manifestPath) {
 
 for (const slug of packageOrder) {
 	const packageDir = path.join(releaseRoot, slug);
-	const manifestPath = path.join(packageDir, "package.json");
+	const configPath = path.join(packageDir, "jsr.json");
 
-	if (await isVersionPublished(manifestPath)) {
+	if (await isVersionPublished(configPath)) {
 		console.log(`Skipping ${slug}; this JSR version is already published.`);
 		continue;
 	}
