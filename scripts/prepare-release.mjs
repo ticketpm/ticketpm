@@ -138,7 +138,7 @@ assert(
 	"All packages must use the same lockstep version before publishing."
 );
 
-const refName = process.env.GITHUB_REF_NAME ?? process.argv[2];
+const refName = process.env.RELEASE_TAG ?? process.argv[2] ?? process.env.GITHUB_REF_NAME;
 if (refName) {
 	assert(refName === `v${releaseVersion}`, `Git tag ${refName} does not match the lockstep version v${releaseVersion}.`);
 }
@@ -179,9 +179,9 @@ for (const pkg of packages) {
 	copyIfPresent(path.join(rootDir, "LICENSE"), path.join(jsrTargetDir, "LICENSE"));
 	rewriteJsrSourceImports(path.join(jsrTargetDir, "src"), releaseVersion);
 
-	const jsrDependencies = {
-		...(rewriteInternalDependencies(pkg.manifest.dependencies, releaseVersion, "jsr") ?? {})
-	};
+	const jsrDependencies = Object.fromEntries(
+		Object.entries(pkg.manifest.dependencies ?? {}).filter(([name]) => !name.startsWith("@ticketpm/"))
+	);
 
 	for (const [name, range] of Object.entries(pkg.manifest.peerDependencies ?? {})) {
 		if (name === "discord.js" && pkg.manifest.devDependencies?.["discord.js"]) {
@@ -192,20 +192,20 @@ for (const pkg of packages) {
 		jsrDependencies[name] = range;
 	}
 
-	const jsrManifest = {
-		name: pkg.manifest.name,
-		version: releaseVersion,
-		type: "module",
-		dependencies: Object.keys(jsrDependencies).length > 0 ? jsrDependencies : undefined
-	};
+	const jsrImports = Object.fromEntries(
+		Object.entries(jsrDependencies).flatMap(([name, range]) => [
+			[name, `npm:${name}@${range}`],
+			[`${name}/`, `npm:${name}@${range}/`]
+		])
+	);
 
 	const jsrConfig = {
 		name: pkg.manifest.name,
 		version: releaseVersion,
-		exports: "./src/index.ts"
+		exports: "./src/index.ts",
+		imports: Object.keys(jsrImports).length > 0 ? jsrImports : undefined
 	};
 
-	writeJson(path.join(jsrTargetDir, "package.json"), jsrManifest);
 	writeJson(path.join(jsrTargetDir, "jsr.json"), jsrConfig);
 }
 
