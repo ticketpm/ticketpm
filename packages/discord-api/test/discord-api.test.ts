@@ -207,6 +207,16 @@ describe("@ticketpm/discord-api", () => {
 					attachments: [],
 					embeds: [],
 					mention_roles: ["r1"],
+					reactions: [
+						{
+							count: 2,
+							count_details: { normal: 1, burst: 1 },
+							me: false,
+							me_burst: false,
+							emoji: { id: "e1", name: "party", animated: false },
+							burst_colors: []
+						}
+					],
 					poll: {
 						question: { text: "choose" },
 						answers: [{ answer_id: 1, poll_media: { text: "a" } }],
@@ -247,6 +257,13 @@ describe("@ticketpm/discord-api", () => {
 						username: "carol",
 						avatar: null
 					} as never
+				],
+				fetchReactionUsers: async ({ type }) => [
+					{
+						id: type === "normal" ? "u4" : "u5",
+						username: type === "normal" ? "dave" : "eve",
+						avatar: null
+					} as never
 				]
 			}
 		});
@@ -254,6 +271,9 @@ describe("@ticketpm/discord-api", () => {
 		expect(data.context.users?.["2"]?.username).toBe("bob");
 		expect(data.context.roles?.r1?.color).toBe("#ff0000");
 		expect(data.messages[0]?.poll?.answer_voters?.[1]?.[0]?.id).toBe("u3");
+		expect(data.messages[0]?.reactions?.[0]?.users?.normal?.[0]?.id).toBe("u4");
+		expect(data.messages[0]?.reactions?.[0]?.users?.burst?.[0]?.id).toBe("u5");
+		expect(data.context.users?.u5?.username).toBe("eve");
 	});
 
 	it("sorts messages chronologically before compact export", () => {

@@ -503,6 +503,20 @@ export function validateViewerCompatibility(transcript: StoredTranscript): Uploa
 
 		validateInteractionMetadataHydration(message.interaction_metadata, users, `${path}.interaction_metadata`, issues);
 
+		for (const [reactionIndex, reaction] of (message.reactions ?? []).entries()) {
+			for (const [kind, reactorIds] of Object.entries(reaction.user_ids ?? {})) {
+				for (const [reactorIndex, reactorId] of reactorIds.entries()) {
+					if (!users?.[reactorId]) {
+						pushIssue(
+							issues,
+							`${path}.reactions[${reactionIndex}].user_ids.${kind}[${reactorIndex}]`,
+							"reaction user cannot be hydrated from context.users"
+						);
+					}
+				}
+			}
+		}
+
 		if (
 			message.referenced_message?.author_id &&
 			!message.referenced_message.author &&

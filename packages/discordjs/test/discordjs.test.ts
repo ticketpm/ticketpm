@@ -1,4 +1,4 @@
-import type { Message } from "discord.js";
+import { Collection, type Message, ReactionType } from "discord.js";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -259,8 +259,8 @@ describe("@ticketpm/discordjs", () => {
 		expect(context.users?.u2?.username).toBe("bob");
 	});
 
-	it("creates a compact transcript from discord.js messages", () => {
-		const transcript = createDiscordJsTranscript({
+	it("creates a compact transcript from discord.js messages", async () => {
+		const transcript = await createDiscordJsTranscript({
 			messages: [createMockMessage()],
 			channel: {
 				id: "c1",
@@ -276,8 +276,64 @@ describe("@ticketpm/discordjs", () => {
 		expect(transcript.context?.channels?.c1?.name).toBe("support");
 	});
 
-	it("creates a draft transcript for media-proxied uploads", () => {
-		const transcript = createDiscordJsDraftTranscript({
+	it("paginates, fetches, and compacts normal and super-reaction users", async () => {
+		const message = createMockMessage();
+		const fetchRequests: Array<{ type: ReactionType; after: string | undefined }> = [];
+		const normalUsers = Array.from({ length: 101 }, (_, index) => ({
+			id: `normal-${index.toString().padStart(3, "0")}`,
+			bot: false,
+			username: `normal-${index}`,
+			avatar: null
+		}));
+		const burstUser = {
+			id: "burst-1",
+			bot: false,
+			username: "carol",
+			avatar: null
+		};
+		Object.assign(message.reactions, {
+			cache: new Map([
+				[
+					"party:e1",
+					{
+						count: 102,
+						countDetails: { normal: 101, burst: 1 },
+						me: false,
+						meBurst: false,
+						emoji: { id: "e1", name: "party", animated: false },
+						burstColors: ["#ff0000"],
+						users: {
+							fetch: async ({ type, after }: { type: ReactionType; after?: string }) => {
+								fetchRequests.push({ type, after });
+								if (type === ReactionType.Super) {
+									return new Collection([[burstUser.id, burstUser]]);
+								}
+
+								const page = after ? normalUsers.slice(100) : normalUsers.slice(0, 100);
+								return new Collection(page.map((user) => [user.id, user]));
+							}
+						}
+					}
+				]
+			])
+		});
+
+		const transcript = await createDiscordJsTranscript({ messages: [message] });
+
+		expect(fetchRequests).toEqual([
+			{ type: ReactionType.Normal, after: undefined },
+			{ type: ReactionType.Normal, after: "normal-099" },
+			{ type: ReactionType.Super, after: undefined }
+		]);
+		expect(transcript.messages[0]?.reactions?.[0]?.user_ids?.normal).toHaveLength(101);
+		expect(transcript.messages[0]?.reactions?.[0]?.user_ids?.normal?.at(-1)).toBe("normal-100");
+		expect(transcript.messages[0]?.reactions?.[0]?.user_ids?.burst).toEqual(["burst-1"]);
+		expect(transcript.context?.users?.["normal-100"]?.username).toBe("normal-100");
+		expect(transcript.context?.users?.["burst-1"]?.username).toBe("carol");
+	});
+
+	it("creates a draft transcript for media-proxied uploads", async () => {
+		const transcript = await createDiscordJsDraftTranscript({
 			messages: [createMockMessage()],
 			channel: {
 				id: "c1",
@@ -297,7 +353,7 @@ describe("@ticketpm/discordjs", () => {
 		expect(transcript.context.channels?.c1?.name).toBe("support");
 	});
 
-	it("sorts discord.js messages chronologically before compact export", () => {
+	it("sorts discord.js messages chronologically before compact export", async () => {
 		const first = createMockMessage();
 		const second = createMockMessage();
 		first.id = "m2";
@@ -305,7 +361,7 @@ describe("@ticketpm/discordjs", () => {
 		second.id = "m1";
 		second.createdTimestamp = Date.parse("2026-03-18T12:00:00.000Z");
 
-		const transcript = createDiscordJsTranscript({
+		const transcript = await createDiscordJsTranscript({
 			messages: [first, second],
 			channel: {
 				id: "c1",
