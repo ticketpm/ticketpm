@@ -2,6 +2,7 @@ import {
 	type APIAttachment,
 	type APIPoll,
 	type APIReaction,
+	type APIReactionKind,
 	type APIStickerItem,
 	buildStoredTranscript,
 	type ChannelInfo,
@@ -18,7 +19,16 @@ import {
 	type UserInfo,
 	type WebhookAuthorOptions
 } from "@ticketpm/core";
-import type { Collection, Guild, GuildMember, Message, MessageReaction, Role, User } from "discord.js";
+import {
+	type Collection,
+	type Guild,
+	type GuildMember,
+	type Message,
+	type MessageReaction,
+	ReactionType,
+	type Role,
+	type User
+} from "discord.js";
 
 export interface DiscordJsChannelLike {
 	id: string;
@@ -136,17 +146,17 @@ function messageReactionToApiReaction(reaction: MessageReaction): APIReaction {
 	return {
 		count: reaction.count ?? 0,
 		count_details: {
-			burst: 0,
-			normal: reaction.count ?? 0
+			burst: reaction.countDetails?.burst ?? 0,
+			normal: reaction.countDetails?.normal ?? reaction.count ?? 0
 		},
 		me: Boolean(reaction.me),
-		me_burst: false,
+		me_burst: Boolean(reaction.meBurst),
 		emoji: {
 			id: reaction.emoji.id ?? null,
 			name: reaction.emoji.name ?? null,
 			animated: reaction.emoji.animated ?? undefined
 		},
-		burst_colors: []
+		burst_colors: reaction.burstColors ?? []
 	};
 }
 
@@ -355,7 +365,7 @@ export function buildDiscordJsContext(messages: readonly Message<boolean>[], opt
  * Normalize and sort discord.js objects into the draft transcript shape used by
  * `TicketPmUploadClient.uploadDraftTranscript()`.
  */
-export function createDiscordJsDraftTranscript(options: CreateDiscordJsTranscriptOptions): TranscriptBuildInput {
+function buildDiscordJsDraftTranscript(options: CreateDiscordJsTranscriptOptions): TranscriptBuildInput {
 	const normalizedMessages = sortMessagesChronologically(
 		options.messages.map((message) => discordJsMessageToDraftMessage(message))
 	);
@@ -367,11 +377,83 @@ export function createDiscordJsDraftTranscript(options: CreateDiscordJsTranscrip
 	};
 }
 
+async function fetchAllReactionUsers(reaction: MessageReaction, kind: APIReactionKind): Promise<User[]> {
+	const users = new Map<string, User>();
+	let after: string | undefined;
+	const type = kind === "burst" ? ReactionType.Super : ReactionType.Normal;
+
+	while (true) {
+		const page = await reaction.users.fetch({ type, limit: 100, after });
+		for (const user of page.values()) {
+			users.set(user.id, user);
+		}
+
+		if (page.size < 100) {
+			break;
+		}
+
+		after = page.last()?.id;
+		if (!after) {
+			break;
+		}
+	}
+
+	return [...users.values()];
+}
+
 /**
- * Normalize, sort, compact, and finalize a transcript from discord.js objects.
+ * Build a draft transcript after fetching every normal and super-reaction
+ * user.
  */
-export function createDiscordJsTranscript(options: CreateDiscordJsTranscriptOptions): StoredTranscript {
-	return buildStoredTranscript(createDiscordJsDraftTranscript(options));
+export async function createDiscordJsDraftTranscript(options: CreateDiscordJsTranscriptOptions): Promise<TranscriptBuildInput> {
+	const transcript = buildDiscordJsDraftTranscript(options);
+	const rawMessages = new Map(options.messages.map((message) => [message.id, message]));
+	const reactionKinds: readonly APIReactionKind[] = ["normal", "burst"];
+
+	for (const message of transcript.messages) {
+		const rawMessage = rawMessages.get(message.id);
+		if (!rawMessage || !message.reactions) {
+			continue;
+		}
+
+		const rawReactions = [...rawMessage.reactions.cache.values()];
+		for (const [reactionIndex, rawReaction] of rawReactions.entries()) {
+			const reaction = message.reactions[reactionIndex];
+			if (!reaction) {
+				continue;
+			}
+
+			const reactionUsers = { ...(reaction.users ?? {}) };
+			for (const kind of reactionKinds) {
+				if (reaction.count_details[kind] <= 0) {
+					continue;
+				}
+
+				const users = await fetchAllReactionUsers(rawReaction, kind);
+				if (users.length === 0) {
+					continue;
+				}
+
+				reactionUsers[kind] = users.map((user) => discordJsUserToUserInfo(user));
+				for (const user of users) {
+					const userInfo = discordJsUserToUserInfo(user);
+					transcript.context.users = transcript.context.users ?? {};
+					transcript.context.users[user.id] = transcript.context.users[user.id] ?? userInfo;
+				}
+			}
+
+			if (Object.keys(reactionUsers).length > 0) {
+				reaction.users = reactionUsers;
+			}
+		}
+	}
+
+	return transcript;
+}
+
+/** Fetch reaction users, then normalize, compact, and finalize the transcript. */
+export async function createDiscordJsTranscript(options: CreateDiscordJsTranscriptOptions): Promise<StoredTranscript> {
+	return buildStoredTranscript(await createDiscordJsDraftTranscript(options));
 }
 
 /**

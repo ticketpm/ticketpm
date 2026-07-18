@@ -1,4 +1,4 @@
-import type { Message } from "discord.js";
+import { type Message, ReactionType } from "discord.js";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -259,8 +259,8 @@ describe("@ticketpm/discordjs", () => {
 		expect(context.users?.u2?.username).toBe("bob");
 	});
 
-	it("creates a compact transcript from discord.js messages", () => {
-		const transcript = createDiscordJsTranscript({
+	it("creates a compact transcript from discord.js messages", async () => {
+		const transcript = await createDiscordJsTranscript({
 			messages: [createMockMessage()],
 			channel: {
 				id: "c1",
@@ -276,8 +276,58 @@ describe("@ticketpm/discordjs", () => {
 		expect(transcript.context?.channels?.c1?.name).toBe("support");
 	});
 
-	it("creates a draft transcript for media-proxied uploads", () => {
-		const transcript = createDiscordJsDraftTranscript({
+	it("fetches and compacts normal and super-reaction users", async () => {
+		const message = createMockMessage();
+		const fetchedTypes: ReactionType[] = [];
+		const normalUser = {
+			id: "u2",
+			bot: false,
+			username: "bob",
+			avatar: null
+		};
+		const burstUser = {
+			id: "u3",
+			bot: false,
+			username: "carol",
+			avatar: null
+		};
+		Object.assign(message.reactions, {
+			cache: new Map([
+				[
+					"party:e1",
+					{
+						count: 2,
+						countDetails: { normal: 1, burst: 1 },
+						me: false,
+						meBurst: false,
+						emoji: { id: "e1", name: "party", animated: false },
+						burstColors: ["#ff0000"],
+						users: {
+							fetch: async ({ type }: { type: ReactionType }) => {
+								fetchedTypes.push(type);
+								return new Map([
+									[
+										type === ReactionType.Super ? burstUser.id : normalUser.id,
+										type === ReactionType.Super ? burstUser : normalUser
+									]
+								]);
+							}
+						}
+					}
+				]
+			])
+		});
+
+		const transcript = await createDiscordJsTranscript({ messages: [message] });
+
+		expect(fetchedTypes).toEqual([ReactionType.Normal, ReactionType.Super]);
+		expect(transcript.messages[0]?.reactions?.[0]?.user_ids).toEqual({ normal: ["u2"], burst: ["u3"] });
+		expect(transcript.context?.users?.u2?.username).toBe("bob");
+		expect(transcript.context?.users?.u3?.username).toBe("carol");
+	});
+
+	it("creates a draft transcript for media-proxied uploads", async () => {
+		const transcript = await createDiscordJsDraftTranscript({
 			messages: [createMockMessage()],
 			channel: {
 				id: "c1",
@@ -297,7 +347,7 @@ describe("@ticketpm/discordjs", () => {
 		expect(transcript.context.channels?.c1?.name).toBe("support");
 	});
 
-	it("sorts discord.js messages chronologically before compact export", () => {
+	it("sorts discord.js messages chronologically before compact export", async () => {
 		const first = createMockMessage();
 		const second = createMockMessage();
 		first.id = "m2";
@@ -305,7 +355,7 @@ describe("@ticketpm/discordjs", () => {
 		second.id = "m1";
 		second.createdTimestamp = Date.parse("2026-03-18T12:00:00.000Z");
 
-		const transcript = createDiscordJsTranscript({
+		const transcript = await createDiscordJsTranscript({
 			messages: [first, second],
 			channel: {
 				id: "c1",

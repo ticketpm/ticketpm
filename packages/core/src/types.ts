@@ -374,6 +374,14 @@ export interface APIReactionCountDetails {
 	normal: number;
 }
 
+export type APIReactionKind = "normal" | "burst";
+
+export interface APIReactionUser extends UserInfo {}
+
+export type APIReactionUsers = Partial<Record<APIReactionKind, APIReactionUser[]>>;
+
+export type APIReactionUserIds = Partial<Record<APIReactionKind, string[]>>;
+
 export interface APIReaction {
 	count: number;
 	count_details: APIReactionCountDetails;
@@ -381,6 +389,10 @@ export interface APIReaction {
 	me_burst: boolean;
 	emoji: APIPartialEmoji;
 	burst_colors: string[];
+	/** Full reactor profiles used while building a transcript. */
+	users?: APIReactionUsers;
+	/** Compact reactor references hydrated from `context.users` by the viewer. */
+	user_ids?: APIReactionUserIds;
 }
 
 export enum StickerFormatType {

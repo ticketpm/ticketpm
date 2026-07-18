@@ -1,5 +1,6 @@
 import {
 	type APIPoll,
+	type APIReactionKind,
 	buildStoredTranscript,
 	type ChannelInfo,
 	type DiscordContext,
@@ -53,6 +54,12 @@ export interface DiscordApiTranscriptEnricher {
 	fetchGuildMember?: (guildId: string, userId: string) => Promise<DiscordApiGuildMemberRecord | null | undefined>;
 	fetchGuildRoles?: (guildId: string) => Promise<readonly DiscordApiRoleRecord[]>;
 	fetchPollAnswerVoters?: (input: { channelId: string; messageId: string; answerId: number }) => Promise<readonly APIUser[]>;
+	fetchReactionUsers?: (input: {
+		channelId: string;
+		messageId: string;
+		emoji: string;
+		type: APIReactionKind;
+	}) => Promise<readonly APIUser[]>;
 }
 
 export interface BuildEnrichedDiscordApiTranscriptOptions extends DiscordApiContextOptions {
@@ -190,6 +197,37 @@ function normalizePoll(poll: APIMessage["poll"] | undefined): APIPoll | undefine
 	};
 }
 
+type DiscordApiReactionWithUsers = NonNullable<APIMessage["reactions"]>[number] & {
+	users?: Partial<Record<APIReactionKind, APIUser[]>>;
+};
+
+function normalizeReactions(reactions: APIMessage["reactions"] | undefined): DraftMessage["reactions"] {
+	return reactions?.map((reaction) => {
+		const reactionWithUsers = reaction as DiscordApiReactionWithUsers;
+		const users = reactionWithUsers.users
+			? Object.fromEntries(
+					Object.entries(reactionWithUsers.users).map(([kind, reactors]) => [
+						kind,
+						(reactors ?? []).map((reactor) => toUserInfo(reactor))
+					])
+				)
+			: undefined;
+
+		return {
+			...reaction,
+			users
+		};
+	});
+}
+
+function formatReactionEmoji(emoji: NonNullable<APIMessage["reactions"]>[number]["emoji"]): string | undefined {
+	if (!emoji.name) {
+		return undefined;
+	}
+
+	return emoji.id ? `${emoji.name}:${emoji.id}` : emoji.name;
+}
+
 function normalizeMessageSnapshot(snapshot: NonNullable<APIMessage["message_snapshots"]>[number]): DraftMessageSnapshot {
 	const snapshotMessage = snapshot.message as typeof snapshot.message & {
 		mention_everyone?: boolean;
@@ -230,7 +268,7 @@ function normalizeReferencedMessage(message: APIMessage): DraftMessage {
 		mention_roles: message.mention_roles,
 		attachments: message.attachments,
 		embeds: message.embeds,
-		reactions: message.reactions,
+		reactions: normalizeReactions(message.reactions),
 		components: message.components as DraftMessage["components"],
 		sticker_items: message.sticker_items,
 		message_reference: message.message_reference,
@@ -265,7 +303,7 @@ export function normalizeDiscordApiMessage(message: APIMessage): DraftMessage {
 		mention_roles: message.mention_roles,
 		attachments: message.attachments,
 		embeds: message.embeds,
-		reactions: message.reactions,
+		reactions: normalizeReactions(message.reactions),
 		components: message.components as DraftMessage["components"],
 		sticker_items: message.sticker_items,
 		referenced_message: message.referenced_message
@@ -343,6 +381,14 @@ export function buildDiscordApiContext(messages: readonly APIMessage[], options?
 		for (const voters of Object.values(answerVoters ?? {})) {
 			for (const voter of voters) {
 				users[voter.id] = users[voter.id] ?? voter;
+			}
+		}
+
+		for (const reaction of message.reactions ?? []) {
+			for (const reactionUsers of Object.values(reaction.users ?? {})) {
+				for (const reactor of reactionUsers) {
+					users[reactor.id] = users[reactor.id] ?? reactor;
+				}
 			}
 		}
 	}
@@ -574,6 +620,52 @@ export async function buildEnrichedDiscordApiTranscriptData(
 					...normalizedMessages[index]!.poll!,
 					answer_voters: answerVoters
 				};
+			}
+		}
+	}
+
+	if (options.enricher.fetchReactionUsers) {
+		const reactionKinds: readonly APIReactionKind[] = ["normal", "burst"];
+
+		for (const [index, rawMessage] of sortedMessages.entries()) {
+			const normalizedReactions = normalizedMessages[index]?.reactions;
+			if (!rawMessage.reactions?.length || !normalizedReactions) {
+				continue;
+			}
+
+			const channelId = rawMessage.channel_id ?? options.channelId;
+			for (const [reactionIndex, rawReaction] of rawMessage.reactions.entries()) {
+				const emoji = formatReactionEmoji(rawReaction.emoji);
+				const normalizedReaction = normalizedReactions[reactionIndex];
+				if (!emoji || !normalizedReaction) {
+					continue;
+				}
+
+				const reactionUsers = { ...(normalizedReaction.users ?? {}) };
+				for (const type of reactionKinds) {
+					if (rawReaction.count_details[type] <= 0) {
+						continue;
+					}
+
+					const reactors = await options.enricher.fetchReactionUsers({
+						channelId,
+						messageId: rawMessage.id,
+						emoji,
+						type
+					});
+					if (reactors.length === 0) {
+						continue;
+					}
+
+					reactionUsers[type] = reactors.map((reactor) => toUserInfo(reactor));
+					for (const reactor of reactors) {
+						users[reactor.id] = users[reactor.id] ?? toUserInfo(reactor);
+					}
+				}
+
+				if (Object.keys(reactionUsers).length > 0) {
+					normalizedReaction.users = reactionUsers;
+				}
 			}
 		}
 	}

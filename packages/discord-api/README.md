@@ -6,7 +6,7 @@ Adapters for turning raw Discord REST payloads into the compact transcript forma
 
 - Conversion from `discord-api-types` message and user payloads into `@ticketpm/core` draft messages.
 - Context builders for transcripts assembled from fetched REST data.
-- Optional callback-based enrichment for missing users, channels, guild members, roles, and poll voters.
+- Optional callback-based enrichment for missing users, channels, guild members, roles, poll voters, and reaction users.
 - One-shot helpers that normalize, sort, compact, and finalize transcripts.
 
 ## Install
@@ -49,7 +49,7 @@ const transcript = createDiscordApiTranscript({
 
 ## Enriched example
 
-Use the enricher path when your messages reference users, channels, roles, or poll voters that are not already present in the payloads you collected.
+Use the enricher path when your messages reference users, channels, roles, poll voters, or reaction users that are not already present in the payloads you collected.
 
 ```ts
 import { createEnrichedDiscordApiTranscript } from "@ticketpm/discord-api";
@@ -64,7 +64,9 @@ const transcript = await createEnrichedDiscordApiTranscript({
     fetchGuildMember: async (guildId, userId) => discordRest.guildMembers.get(guildId, userId),
     fetchGuildRoles: async (guildId) => discordRest.guildRoles.list(guildId),
     fetchPollAnswerVoters: async ({ channelId, messageId, answerId }) =>
-      discordRest.polls.listAnswerVoters(channelId, messageId, answerId)
+      discordRest.polls.listAnswerVoters(channelId, messageId, answerId),
+    fetchReactionUsers: async ({ channelId, messageId, emoji, type }) =>
+      discordRest.reactions.listUsers(channelId, messageId, emoji, { type })
   },
   baseContext: {
     channel_id: "123",
@@ -82,7 +84,7 @@ This package never performs HTTP requests on its own. All enrichment comes from 
 Most Discord API integrations use one of these paths:
 
 1. If you already have complete REST payloads, call `createDiscordApiTranscript()`.
-2. If you need to fill missing mentions, roles, members, or poll voters, call `createEnrichedDiscordApiTranscript()`.
+2. If you need to fill missing mentions, roles, members, poll voters, or reaction users, call `createEnrichedDiscordApiTranscript()`.
 3. If you want the enriched normalized draft data before compaction, call `buildEnrichedDiscordApiTranscriptData()`.
 
 ## Public API
@@ -112,6 +114,7 @@ Most Discord API integrations use one of these paths:
 - `fetchGuildMember(guildId, userId)` for guild member role membership
 - `fetchGuildRoles(guildId)` for role metadata such as name, position, and color
 - `fetchPollAnswerVoters({ channelId, messageId, answerId })` for poll voter hydration
+- `fetchReactionUsers({ channelId, messageId, emoji, type })` for normal and super-reaction user hydration; `type` is `"normal"` or `"burst"`
 
 You only need to implement the callbacks your export flow actually needs.
 
@@ -125,6 +128,7 @@ You only need to implement the callbacks your export flow actually needs.
 - When the enricher resolves the current thread channel, the parent channel is fetched as well when `parent_id` is present.
 - Guild member role lists are filtered to roles that were actually resolved through `fetchGuildRoles()`.
 - Poll answer voters are injected into the normalized draft poll data when `fetchPollAnswerVoters()` returns results.
+- Reaction users are grouped by normal or super reaction, deduplicated into `context.users`, and compacted to user IDs. The callback should return every page for the requested reaction.
 - If the current transcript channel is still missing at the end, the package falls back to a channel record whose name is the raw channel ID.
 
 ## Typical upload flow

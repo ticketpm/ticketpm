@@ -8,7 +8,7 @@ Adapters for converting `discord.js` objects into `ticket.pm` transcript payload
 - Context builders for transcripts assembled from already-fetched discord.js objects.
 - Draft transcript creation for media-proxied uploads through `@ticketpm/core`.
 - A pagination helper for walking backwards through channel history before export.
-- One-shot helpers that normalize, sort, compact, and finalize transcripts.
+- One-shot helpers that can fetch reaction users before normalizing, sorting, compacting, and finalizing transcripts.
 
 ## Install
 
@@ -35,7 +35,7 @@ import { createDiscordJsTranscript, fetchMessagesUpToLimit } from "@ticketpm/dis
 
 const messages = await fetchMessagesUpToLimit(channel, 1000);
 
-const transcript = createDiscordJsTranscript({
+const transcript = await createDiscordJsTranscript({
   messages,
   channel: {
     id: channel.id,
@@ -47,11 +47,11 @@ const transcript = createDiscordJsTranscript({
 });
 ```
 
-`fetchMessagesUpToLimit()` pages backward through channel history. `createDiscordJsTranscript()` then sorts the normalized messages chronologically before compact export.
+`fetchMessagesUpToLimit()` pages backward through channel history. `createDiscordJsTranscript()` fetches every page of normal and super-reaction users, then sorts and compacts the messages.
 
 ## Build from already-fetched objects
 
-If you already have the messages, roles, members, and channel metadata you want, you can pass them directly and skip extra Discord fetches in your own code. Member data is used only to attach role metadata to transcript participants.
+If you already have the messages, roles, members, and channel metadata you want, you can pass them directly. Member data is used only to attach role metadata to transcript participants; transcript creation still fetches reaction identities from Discord.
 
 ```ts
 import { buildDiscordJsContext, createDiscordJsTranscript } from "@ticketpm/discordjs";
@@ -76,7 +76,7 @@ const context = buildDiscordJsContext(messages, {
   members: guild.members.cache.values()
 });
 
-const transcript = createDiscordJsTranscript({
+const transcript = await createDiscordJsTranscript({
   messages,
   baseContext: context,
   channel: {
@@ -101,8 +101,8 @@ const transcript = createDiscordJsTranscript({
 ### Context and transcript creation
 
 - `buildDiscordJsContext(messages, options)` builds transcript context from already-fetched discord.js objects.
-- `createDiscordJsDraftTranscript(options)` normalizes messages, sorts them oldest-first, and returns the draft transcript shape expected by `TicketPmUploadClient.uploadDraftTranscript()`.
-- `createDiscordJsTranscript(options)` normalizes messages, sorts them oldest-first, builds context, and compacts the final transcript.
+- `createDiscordJsDraftTranscript(options)` fetches all normal and super-reaction users, normalizes messages, sorts them oldest-first, and returns the draft transcript shape expected by `TicketPmUploadClient.uploadDraftTranscript()`.
+- `createDiscordJsTranscript(options)` fetches reaction users, normalizes messages, sorts them oldest-first, builds context, and compacts the final transcript.
 
 ### Message collection
 
@@ -111,6 +111,7 @@ const transcript = createDiscordJsTranscript({
 ## Behavior notes
 
 - `createDiscordJsTranscript()` always sorts messages chronologically before compact export.
+- Transcript creation is asynchronous because Discord exposes reaction identities through paginated HTTP endpoints.
 - `createDiscordJsDraftTranscript()` is the right helper when you want `@ticketpm/core` to proxy avatars, attachments, embed media, and guild icons through `https://m.ticket.pm/v2` during upload.
 - `fetchMessagesUpToLimit()` returns the messages in the order they were fetched from Discord history, which is typically newest-first. The transcript helper reorders them for final export.
 - `buildDiscordJsContext()` keeps pre-seeded `baseContext` entries and fills missing users from transcript messages, mentions, and references.
@@ -140,7 +141,7 @@ import { createDiscordJsDraftTranscript, fetchMessagesUpToLimit } from "@ticketp
 
 const messages = await fetchMessagesUpToLimit(channel, 1000);
 
-const draftTranscript = createDiscordJsDraftTranscript({
+const draftTranscript = await createDiscordJsDraftTranscript({
   messages,
   channel: {
     id: channel.id,

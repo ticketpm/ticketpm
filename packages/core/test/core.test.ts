@@ -382,7 +382,8 @@ describe("@ticketpm/core", () => {
 				users: {
 					u1: { id: "u1", username: "alice" },
 					u2: { id: "u2", username: "bob" },
-					u3: { id: "u3", username: "carol" }
+					u3: { id: "u3", username: "carol" },
+					u4: { id: "u4", username: "dave" }
 				}
 			},
 			messages: [
@@ -399,6 +400,19 @@ describe("@ticketpm/core", () => {
 							username: "bob"
 						}
 					],
+					reactions: [
+						{
+							count: 1,
+							count_details: { normal: 1, burst: 0 },
+							me: false,
+							me_burst: false,
+							emoji: { name: "👍" },
+							burst_colors: [],
+							users: {
+								normal: [{ id: "u4", username: "dave" }]
+							}
+						}
+					],
 					poll: {
 						question: { text: "choose" },
 						answers: [{ answer_id: 1, poll_media: { text: "a" } }],
@@ -413,6 +427,8 @@ describe("@ticketpm/core", () => {
 				}
 			]
 		});
+		expect(transcript.messages[0]?.reactions?.[0]?.users).toBeUndefined();
+		expect(transcript.messages[0]?.reactions?.[0]?.user_ids).toEqual({ normal: ["u4"] });
 
 		expect(validateViewerCompatibility(transcript)).toEqual({
 			ok: true,
@@ -564,7 +580,7 @@ describe("@ticketpm/core", () => {
 		});
 	});
 
-	it("reports hydration gaps for nested interaction metadata, references, and poll voters", () => {
+	it("reports hydration gaps for nested interaction metadata, references, reaction users, and poll voters", () => {
 		const transcript: StoredTranscript = {
 			context: {
 				channel_id: "c1",
@@ -593,6 +609,17 @@ describe("@ticketpm/core", () => {
 						id: "ref1",
 						author_id: "u4"
 					},
+					reactions: [
+						{
+							count: 1,
+							count_details: { normal: 1, burst: 0 },
+							me: false,
+							me_burst: false,
+							emoji: { name: "👍" },
+							burst_colors: [],
+							user_ids: { normal: ["u6"] }
+						}
+					],
 					poll: {
 						question: { text: "choose" },
 						answers: [{ answer_id: 1, poll_media: { text: "a" } }],
@@ -617,6 +644,10 @@ describe("@ticketpm/core", () => {
 				{
 					path: "messages[0].interaction_metadata.triggering_interaction_metadata.user_id",
 					message: "interaction user cannot be hydrated from context.users"
+				},
+				{
+					path: "messages[0].reactions[0].user_ids.normal[0]",
+					message: "reaction user cannot be hydrated from context.users"
 				},
 				{
 					path: "messages[0].referenced_message.author_id",
@@ -752,14 +783,26 @@ describe("@ticketpm/core", () => {
 				users: {
 					u1: { id: "u1", username: "alice", avatar: "hash1" },
 					u2: { id: "u2", username: "bob", avatar: "hash2" },
-					u3: { id: "u3", username: "carol", avatar: "hash3" }
+					u3: { id: "u3", username: "carol", avatar: "hash3" },
+					u4: { id: "u4", username: "dave", avatar: "hash4" }
 				}
 			},
 			messages: [
 				{
 					id: "m1",
 					author: { id: "u1", username: "alice" },
-					mentions: [{ id: "u2", username: "bob" }]
+					mentions: [{ id: "u2", username: "bob" }],
+					reactions: [
+						{
+							count: 1,
+							count_details: { normal: 1, burst: 0 },
+							me: false,
+							me_burst: false,
+							emoji: { name: "👍" },
+							burst_colors: [],
+							users: { normal: [{ id: "u4", username: "dave" }] }
+						}
+					]
 				}
 			]
 		};
@@ -770,11 +813,16 @@ describe("@ticketpm/core", () => {
 			}
 		});
 
-		expect(fetchBodies).toEqual([JSON.stringify({ hash: "hash1", id: "u1" }), JSON.stringify({ hash: "hash2", id: "u2" })]);
+		expect(fetchBodies).toEqual([
+			JSON.stringify({ hash: "hash1", id: "u1" }),
+			JSON.stringify({ hash: "hash2", id: "u2" }),
+			JSON.stringify({ hash: "hash4", id: "u4" })
+		]);
 		expect(progressUpdates).toEqual([
-			[0, 2],
-			[1, 2],
-			[2, 2]
+			[0, 3],
+			[1, 3],
+			[2, 3],
+			[3, 3]
 		]);
 	});
 

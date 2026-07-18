@@ -2,6 +2,8 @@ import { stringifyCanonicalJson } from "./canonical.js";
 import type {
 	APIPoll,
 	APIPollVoter,
+	APIReaction,
+	APIReactionKind,
 	ChannelInfo,
 	CompactMessageInteraction,
 	CompactMessageInteractionMetadata,
@@ -66,6 +68,30 @@ function compactPoll(poll: APIPoll | undefined): APIPoll | undefined {
 			Object.entries(answer_voters).map(([answerId, voters]) => [Number(answerId), voters.map((voter: APIPollVoter) => voter.id)])
 		)
 	};
+}
+
+const REACTION_KINDS: readonly APIReactionKind[] = ["normal", "burst"];
+
+function compactReaction(reaction: APIReaction): APIReaction {
+	const { users, ...compactReactionData } = reaction;
+	if (!users) {
+		return compactReactionData;
+	}
+
+	const userIds: APIReaction["user_ids"] = { ...(compactReactionData.user_ids ?? {}) };
+	for (const kind of REACTION_KINDS) {
+		const kindUsers = users[kind];
+		if (kindUsers?.length) {
+			userIds[kind] = kindUsers.map((user) => user.id);
+		}
+	}
+
+	return Object.keys(userIds).length > 0
+		? {
+				...compactReactionData,
+				user_ids: userIds
+			}
+		: compactReactionData;
 }
 
 function compactUserIdentity(user: UserInfo): UserInfo {
@@ -134,7 +160,7 @@ function compactMessage(message: DraftMessage, users: Record<string, UserInfo> |
 		edited_timestamp: message.edited_timestamp,
 		attachments: message.attachments,
 		embeds: message.embeds,
-		reactions: message.reactions,
+		reactions: message.reactions?.map(compactReaction),
 		components: message.components,
 		sticker_items: message.sticker_items,
 		poll: compactPoll(message.poll),

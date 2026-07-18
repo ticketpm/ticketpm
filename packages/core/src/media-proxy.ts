@@ -446,6 +446,14 @@ function collectMessageUsers(message: DraftMessage, users: UserInfo[]): void {
 		}
 	}
 
+	for (const reaction of message.reactions ?? []) {
+		for (const reactionUsers of Object.values(reaction.users ?? {})) {
+			for (const reactor of reactionUsers) {
+				users.push(reactor);
+			}
+		}
+	}
+
 	if (message.referenced_message) {
 		collectMessageUsers(message.referenced_message, users);
 	}
