@@ -12,7 +12,7 @@ import {
 	type TicketPmMediaProxyClientOptions,
 	type UploadProgressCallback
 } from "./media-proxy.js";
-import type { StoredTranscript, TranscriptBuildInput } from "./types.js";
+import type { StoredTranscript, TranscriptBuildInput, TranscriptCensorshipOptions } from "./types.js";
 import { joinUrl } from "./utils.js";
 
 export interface TicketPmUploadClientOptions {
@@ -59,7 +59,7 @@ export type UploadDraftTranscriptMediaProxy =
 	| TicketPmMediaProxyClient
 	| Partial<Pick<TicketPmMediaProxyClientOptions, "baseUrl" | "token" | "fetch" | "avatarHashCache">>;
 
-export interface UploadDraftTranscriptOptions extends UploadCompressedTranscriptOptions {
+export interface UploadDraftTranscriptOptions extends UploadCompressedTranscriptOptions, TranscriptCensorshipOptions {
 	/**
 	 * Optional ZSTD compression level forwarded to `compressStoredTranscript()`.
 	 */
@@ -189,7 +189,7 @@ export class TicketPmUploadClient {
 			});
 		}
 
-		const transcript = buildStoredTranscript(workingDraft);
+		const transcript = buildStoredTranscript(workingDraft, options);
 		return this.uploadTranscript(transcript, options);
 	}
 

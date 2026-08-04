@@ -16,6 +16,7 @@ import {
 	type StoredTranscript,
 	sortMessagesChronologically,
 	type TranscriptBuildInput,
+	type TranscriptCensorshipOptions,
 	type UserInfo,
 	type WebhookAuthorOptions
 } from "@ticketpm/core";
@@ -46,9 +47,11 @@ export interface DiscordJsContextOptions {
 	members?: Iterable<GuildMember>;
 }
 
-export interface CreateDiscordJsTranscriptOptions extends DiscordJsContextOptions {
+export interface CreateDiscordJsDraftTranscriptOptions extends DiscordJsContextOptions {
 	messages: readonly Message<boolean>[];
 }
+
+export interface CreateDiscordJsTranscriptOptions extends CreateDiscordJsDraftTranscriptOptions, TranscriptCensorshipOptions {}
 
 type DiscordJsPollLike = {
 	question?: { text?: string };
@@ -365,7 +368,7 @@ export function buildDiscordJsContext(messages: readonly Message<boolean>[], opt
  * Normalize and sort discord.js objects into the draft transcript shape used by
  * `TicketPmUploadClient.uploadDraftTranscript()`.
  */
-function buildDiscordJsDraftTranscript(options: CreateDiscordJsTranscriptOptions): TranscriptBuildInput {
+function buildDiscordJsDraftTranscript(options: CreateDiscordJsDraftTranscriptOptions): TranscriptBuildInput {
 	const normalizedMessages = sortMessagesChronologically(
 		options.messages.map((message) => discordJsMessageToDraftMessage(message))
 	);
@@ -405,7 +408,9 @@ async function fetchAllReactionUsers(reaction: MessageReaction, kind: APIReactio
  * Build a draft transcript after fetching every normal and super-reaction
  * user.
  */
-export async function createDiscordJsDraftTranscript(options: CreateDiscordJsTranscriptOptions): Promise<TranscriptBuildInput> {
+export async function createDiscordJsDraftTranscript(
+	options: CreateDiscordJsDraftTranscriptOptions
+): Promise<TranscriptBuildInput> {
 	const transcript = buildDiscordJsDraftTranscript(options);
 	const rawMessages = new Map(options.messages.map((message) => [message.id, message]));
 	const reactionKinds: readonly APIReactionKind[] = ["normal", "burst"];
@@ -453,7 +458,7 @@ export async function createDiscordJsDraftTranscript(options: CreateDiscordJsTra
 
 /** Fetch reaction users, then normalize, compact, and finalize the transcript. */
 export async function createDiscordJsTranscript(options: CreateDiscordJsTranscriptOptions): Promise<StoredTranscript> {
-	return buildStoredTranscript(await createDiscordJsDraftTranscript(options));
+	return buildStoredTranscript(await createDiscordJsDraftTranscript(options), options);
 }
 
 /**

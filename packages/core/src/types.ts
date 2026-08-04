@@ -100,6 +100,21 @@ export interface DiscordContext {
 	users?: Record<string, UserInfo>;
 	members?: Record<string, MemberInfo>;
 	guild?: GuildInfo;
+	/** Censored spans keyed by top-level message ID. Paths are JSON Pointers relative to that message. */
+	censored_ranges?: Record<string, CensoredTextRange[]>;
+}
+
+export interface CensoredTextRange {
+	path: string;
+	/** Inclusive UTF-16 offset in the stored, already-censored field. */
+	start: number;
+	/** Exclusive UTF-16 offset in the stored, already-censored field. */
+	end: number;
+}
+
+export interface TranscriptCensorshipOptions {
+	/** Literal, case-insensitive terms to replace before the transcript is stored. */
+	censoredWords?: readonly string[];
 }
 
 export interface APIEmbedAuthor {

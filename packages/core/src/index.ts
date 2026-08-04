@@ -1,4 +1,5 @@
 export * from "./canonical.js";
+export * from "./censorship.js";
 export * from "./compact.js";
 export * from "./constants.js";
 export * from "./identity.js";

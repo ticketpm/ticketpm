@@ -221,7 +221,7 @@ Most integrations follow this order:
 1. Normalize source messages into the draft transcript shape.
 2. Optionally proxy media and avatar assets.
    `uploadDraftTranscript()` does this automatically unless you set `mediaProxy: false`.
-3. Build the compact stored transcript with `buildStoredTranscript()`.
+3. Build the compact stored transcript with `buildStoredTranscript()`, optionally censoring literal terms at this boundary.
 4. Optionally validate it with `validateTicketPmUploadPayload()` and `validateViewerCompatibility()`.
 5. Compress it with `compressStoredTranscript()`.
 6. Upload it with `TicketPmUploadClient`.
@@ -230,11 +230,29 @@ Most integrations follow this order:
 
 ### Transcript building
 
-- `buildStoredTranscript(input)` compacts a draft transcript into the viewer/upload format expected by `ticket.pm`.
+- `buildStoredTranscript(input, options)` compacts a draft transcript into the viewer/upload format expected by `ticket.pm`.
 - Reaction profiles in `reaction.users.normal` and `reaction.users.burst` are compacted to `reaction.user_ids` and hydrated from `context.users` by the viewer.
 - Webhook authors normally use the shared `context.users` entry. When one webhook uses multiple usernames or avatars, the most common identity remains shared and only minority variants are stored inline on their messages.
 - `sortMessagesChronologically(messages)` sorts newest-first collections into stable oldest-first order.
 - `pruneForExport(value)` removes empty structures and nullish values using the same rules as the compact export path.
+
+### Transcript censorship
+
+Pass `censoredWords` when building or uploading a transcript. Matches are literal, case-insensitive, and must contain at least three Unicode characters.
+
+```ts
+const transcript = buildStoredTranscript(draftTranscript, {
+  censoredWords: ["customer@example.com", "FR761234567890"]
+});
+
+await uploadClient.uploadDraftTranscript(draftTranscript, {
+  censoredWords: ["customer@example.com", "FR761234567890"]
+});
+```
+
+For each match, the builder replaces approximately 70% of its Unicode characters with `•`, while always leaving at least the first and last characters visible. For example, `secret` becomes `s••••t`.
+
+The original list is build-time only and is never stored. The resulting `context.censored_ranges` contains only the message ID, JSON Pointer path, and UTF-16 offsets needed by the ticket.pm viewer to identify censored spans. Censorship covers message, referenced-message, forwarded-snapshot, embed, component, and poll text; URLs, IDs, and filenames are left unchanged.
 
 ### Validation
 

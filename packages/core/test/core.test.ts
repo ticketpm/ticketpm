@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	buildStoredTranscript,
 	ComponentType,
+	type ContainerChildComponent,
 	collectTranscriptMediaUrls,
 	compressStoredTranscript,
 	type DiscordContext,
@@ -12,6 +13,7 @@ import {
 	MAX_TRANSCRIPT_CHANNEL_NAME_CHARACTERS,
 	MAX_TRANSCRIPT_COMPRESSED_BYTES,
 	MAX_TRANSCRIPT_NESTING_DEPTH,
+	type MessageTopLevelComponent,
 	proxyGuildIconInPlace,
 	proxyTranscriptAssetsInPlace,
 	proxyTranscriptAvatarsInPlace,
@@ -152,6 +154,158 @@ describe("@ticketpm/core", () => {
 		});
 		expect(validateTicketPmUploadPayload(transcript).ok).toBe(true);
 		expect(validateViewerCompatibility(transcript).ok).toBe(false);
+	});
+
+	it("censors user-visible transcript text without storing the source words", () => {
+		const input: TranscriptBuildInput = {
+			context: {
+				channel_id: "c1",
+				channels: {
+					c1: { name: "support" }
+				}
+			},
+			messages: [
+				{
+					id: "m1",
+					content: "SECRET and private",
+					embeds: [
+						{
+							title: "Private title",
+							description: "secret details"
+						}
+					],
+					components: [
+						{
+							type: ComponentType.Container,
+							components: [
+								{
+									type: ComponentType.TextDisplay,
+									content: "private container"
+								}
+							]
+						}
+					],
+					poll: {
+						question: { text: "Secret choice" },
+						answers: [{ answer_id: 1, poll_media: { text: "Private answer" } }],
+						expiry: "2026-03-18T13:00:00.000Z",
+						allow_multiselect: false,
+						layout_type: 1
+					},
+					referenced_message: {
+						id: "m0",
+						content: "secret reply"
+					},
+					message_snapshots: [
+						{
+							message: {
+								content: "private snapshot"
+							}
+						}
+					]
+				}
+			]
+		};
+
+		const transcript = buildStoredTranscript(input, {
+			censoredWords: ["secret", "PRIVATE"]
+		});
+		const message = transcript.messages[0];
+		const ranges = transcript.context?.censored_ranges?.m1;
+
+		expect(message?.content).toBe("S••••T and p•••••e");
+		expect(message?.embeds?.[0]).toMatchObject({
+			title: "P•••••e title",
+			description: "s••••t details"
+		});
+		expect(message?.components?.[0]).toMatchObject({
+			components: [{ content: "p•••••e container" }]
+		});
+		expect(message?.poll?.question.text).toBe("S••••t choice");
+		expect(message?.poll?.answers[0]?.poll_media.text).toBe("P•••••e answer");
+		expect(message?.referenced_message?.content).toBe("s••••t reply");
+		expect(message?.message_snapshots?.[0]?.message.content).toBe("p•••••e snapshot");
+		expect(ranges).toEqual(
+			expect.arrayContaining([
+				{ path: "/content", start: 0, end: 6 },
+				{ path: "/content", start: 11, end: 18 },
+				{ path: "/embeds/0/title", start: 0, end: 7 },
+				{ path: "/components/0/components/0/content", start: 0, end: 7 },
+				{ path: "/poll/question/text", start: 0, end: 6 },
+				{ path: "/referenced_message/content", start: 0, end: 6 },
+				{ path: "/message_snapshots/0/message/content", start: 0, end: 7 }
+			])
+		);
+		expect(JSON.stringify(transcript).toLowerCase()).not.toContain("secret");
+		expect(JSON.stringify(transcript).toLowerCase()).not.toContain("private");
+		expect(input.messages[0]?.content).toBe("SECRET and private");
+	});
+
+	it("preserves component types that are newer than the current type definitions", () => {
+		const futureTopLevelComponent: MessageTopLevelComponent = {
+			type: ComponentType.TextDisplay,
+			content: "future top-level component"
+		};
+		const futureContainerChild: ContainerChildComponent = {
+			type: ComponentType.TextDisplay,
+			content: "future container child"
+		};
+		Reflect.set(futureTopLevelComponent, "type", 1000);
+		Reflect.set(futureContainerChild, "type", 1001);
+
+		const transcript = buildStoredTranscript(
+			{
+				context: {},
+				messages: [
+					{
+						id: "m1",
+						content: "secret",
+						components: [
+							futureTopLevelComponent,
+							{
+								type: ComponentType.Container,
+								components: [futureContainerChild]
+							}
+						]
+					}
+				]
+			},
+			{ censoredWords: ["secret"] }
+		);
+		const components = transcript.messages[0]?.components;
+
+		expect(components?.[0]).toEqual(futureTopLevelComponent);
+		expect(components?.[1]?.type).toBe(ComponentType.Container);
+		if (components?.[1]?.type !== ComponentType.Container) {
+			throw new Error("Expected the second component to remain a container.");
+		}
+		expect(components[1].components[0]).toEqual(futureContainerChild);
+	});
+
+	it("uses Unicode characters for the seventy-percent masking calculation", () => {
+		const transcript = buildStoredTranscript(
+			{
+				context: {},
+				messages: [{ id: "m1", content: "abc abcd abcdef a😀b" }]
+			},
+			{
+				censoredWords: ["abc", "abcd", "abcdef", "a😀b"]
+			}
+		);
+
+		expect(transcript.messages[0]?.content).toBe("a•c a••d a••••f a•b");
+	});
+
+	it("rejects censored words shorter than three Unicode characters", () => {
+		expect(() =>
+			buildStoredTranscript(
+				{
+					context: {},
+					messages: []
+				},
+				{ censoredWords: ["ab"] }
+			)
+		).toThrowError(RangeError);
 	});
 
 	it("stores only minority webhook identity variants inline", () => {
@@ -1721,12 +1875,17 @@ describe("@ticketpm/core", () => {
 			}) as typeof fetch
 		});
 
-		await uploadClient.uploadDraftTranscript(draftTranscript);
+		await uploadClient.uploadDraftTranscript(draftTranscript, {
+			censoredWords: ["hello"]
+		});
 
 		const uploadRequest = fetchCalls.find((call) => call.url === "https://api.ticket.pm/v2/upload?uuid=uuid");
 		const uploadedTranscript = await decodeCompressedUploadBody(uploadRequest?.body);
 
 		expect(draftTranscript.messages[0]?.attachments?.[0]?.proxy_url).toBeUndefined();
 		expect(uploadedTranscript.messages[0].attachments[0].proxy_url).toBe("https://m.ticket.pm/v2/attachments/attachment-hash");
+		expect(uploadedTranscript.messages[0].content).toBe("h•••o");
+		expect(uploadedTranscript.context.censored_ranges.m1).toEqual([{ path: "/content", start: 0, end: 5 }]);
+		expect(uploadedTranscript.censoredWords).toBeUndefined();
 	});
 });
