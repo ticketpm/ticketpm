@@ -36,6 +36,7 @@ import { createDiscordApiTranscript } from "@ticketpm/discord-api";
 
 const transcript = createDiscordApiTranscript({
   messages,
+  censoredWords: ["customer@example.com"],
   baseContext: {
     channel_id: "123",
     channels: {
@@ -45,7 +46,7 @@ const transcript = createDiscordApiTranscript({
 });
 ```
 
-`createDiscordApiTranscript()` sorts messages chronologically before compact export.
+`createDiscordApiTranscript()` sorts messages chronologically before compact export. `censoredWords` contains case-insensitive literal terms of at least three Unicode characters; the terms are censored during compaction and are never stored in transcript context.
 
 ## Enriched example
 

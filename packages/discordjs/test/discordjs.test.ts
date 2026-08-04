@@ -262,6 +262,7 @@ describe("@ticketpm/discordjs", () => {
 	it("creates a compact transcript from discord.js messages", async () => {
 		const transcript = await createDiscordJsTranscript({
 			messages: [createMockMessage()],
+			censoredWords: ["HELLO"],
 			channel: {
 				id: "c1",
 				name: "support",
@@ -271,9 +272,11 @@ describe("@ticketpm/discordjs", () => {
 
 		expect(transcript.messages[0]).toMatchObject({
 			id: "m1",
-			author_id: "u1"
+			author_id: "u1",
+			content: "h•••o"
 		});
 		expect(transcript.context?.channels?.c1?.name).toBe("support");
+		expect(transcript.context?.censored_ranges?.m1).toEqual([{ path: "/content", start: 0, end: 5 }]);
 	});
 
 	it("paginates, fetches, and compacts normal and super-reaction users", async () => {

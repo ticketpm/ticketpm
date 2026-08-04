@@ -13,6 +13,7 @@ import {
 	isWebhookAuthor,
 	type StoredTranscript,
 	sortMessagesChronologically,
+	type TranscriptCensorshipOptions,
 	type UserInfo,
 	type WebhookAuthorOptions
 } from "@ticketpm/core";
@@ -44,7 +45,7 @@ export interface DiscordApiContextOptions {
 	baseContext?: DiscordContext;
 }
 
-export interface CreateDiscordApiTranscriptOptions extends DiscordApiContextOptions {
+export interface CreateDiscordApiTranscriptOptions extends DiscordApiContextOptions, TranscriptCensorshipOptions {
 	messages: readonly APIMessage[];
 }
 
@@ -62,7 +63,7 @@ export interface DiscordApiTranscriptEnricher {
 	}) => Promise<readonly APIUser[]>;
 }
 
-export interface BuildEnrichedDiscordApiTranscriptOptions extends DiscordApiContextOptions {
+export interface BuildEnrichedDiscordApiTranscriptOptions extends DiscordApiContextOptions, TranscriptCensorshipOptions {
 	messages: readonly APIMessage[];
 	channelId: string;
 	guildId?: string;
@@ -418,10 +419,13 @@ export function createDiscordApiTranscript(options: CreateDiscordApiTranscriptOp
 		baseContext: options.baseContext
 	});
 
-	return buildStoredTranscript({
-		messages: normalizedMessages,
-		context
-	});
+	return buildStoredTranscript(
+		{
+			messages: normalizedMessages,
+			context
+		},
+		options
+	);
 }
 
 /**
@@ -695,5 +699,5 @@ export async function createEnrichedDiscordApiTranscript(
 	options: BuildEnrichedDiscordApiTranscriptOptions
 ): Promise<StoredTranscript> {
 	const data = await buildEnrichedDiscordApiTranscriptData(options);
-	return buildStoredTranscript(data);
+	return buildStoredTranscript(data, options);
 }

@@ -156,6 +156,7 @@ describe("@ticketpm/discord-api", () => {
 
 	it("creates a compact transcript from raw API payloads", () => {
 		const transcript = createDiscordApiTranscript({
+			censoredWords: ["HELLO"],
 			messages: [
 				{
 					id: "m1",
@@ -183,9 +184,10 @@ describe("@ticketpm/discord-api", () => {
 		expect(transcript.messages[0]).toMatchObject({
 			id: "m1",
 			author_id: "u1",
-			content: "hello"
+			content: "h•••o"
 		});
 		expect(transcript.context?.channels?.c1?.name).toBe("support");
+		expect(transcript.context?.censored_ranges?.m1).toEqual([{ path: "/content", start: 0, end: 5 }]);
 	});
 
 	it("enriches missing users and poll voters through callbacks", async () => {

@@ -37,6 +37,7 @@ const messages = await fetchMessagesUpToLimit(channel, 1000);
 
 const transcript = await createDiscordJsTranscript({
   messages,
+  censoredWords: ["customer@example.com"],
   channel: {
     id: channel.id,
     name: channel.name,
@@ -47,7 +48,7 @@ const transcript = await createDiscordJsTranscript({
 });
 ```
 
-`fetchMessagesUpToLimit()` pages backward through channel history. `createDiscordJsTranscript()` fetches every page of normal and super-reaction users, then sorts and compacts the messages.
+`fetchMessagesUpToLimit()` pages backward through channel history. `createDiscordJsTranscript()` fetches every page of normal and super-reaction users, then sorts and compacts the messages. `censoredWords` contains case-insensitive literal terms of at least three Unicode characters; the terms are censored during compaction and are never stored in transcript context.
 
 ## Build from already-fetched objects
 

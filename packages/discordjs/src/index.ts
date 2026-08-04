@@ -16,6 +16,7 @@ import {
 	type StoredTranscript,
 	sortMessagesChronologically,
 	type TranscriptBuildInput,
+	type TranscriptCensorshipOptions,
 	type UserInfo,
 	type WebhookAuthorOptions
 } from "@ticketpm/core";
@@ -46,7 +47,7 @@ export interface DiscordJsContextOptions {
 	members?: Iterable<GuildMember>;
 }
 
-export interface CreateDiscordJsTranscriptOptions extends DiscordJsContextOptions {
+export interface CreateDiscordJsTranscriptOptions extends DiscordJsContextOptions, TranscriptCensorshipOptions {
 	messages: readonly Message<boolean>[];
 }
 
@@ -453,7 +454,7 @@ export async function createDiscordJsDraftTranscript(options: CreateDiscordJsTra
 
 /** Fetch reaction users, then normalize, compact, and finalize the transcript. */
 export async function createDiscordJsTranscript(options: CreateDiscordJsTranscriptOptions): Promise<StoredTranscript> {
-	return buildStoredTranscript(await createDiscordJsDraftTranscript(options));
+	return buildStoredTranscript(await createDiscordJsDraftTranscript(options), options);
 }
 
 /**
