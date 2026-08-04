@@ -1,4 +1,5 @@
 import { stringifyCanonicalJson } from "./canonical.js";
+import { applyTranscriptCensorship } from "./censorship.js";
 import type {
 	APIPoll,
 	APIPollVoter,
@@ -18,6 +19,7 @@ import type {
 	StoredCompactMessage,
 	StoredTranscript,
 	TranscriptBuildInput,
+	TranscriptCensorshipOptions,
 	UserInfo
 } from "./types.js";
 import { sortRecordByKey } from "./utils.js";
@@ -303,7 +305,8 @@ export function sortTranscriptContext(context: DiscordContext): DiscordContext {
 		channels: sortRecordByKey<ChannelInfo>(channels),
 		roles: sortRecordByKey<RoleInfo>(context.roles),
 		members: sortRecordByKey<MemberInfo>(context.members),
-		guild: context.guild
+		guild: context.guild,
+		censored_ranges: sortRecordByKey(context.censored_ranges)
 	};
 }
 
@@ -311,15 +314,16 @@ export function sortTranscriptContext(context: DiscordContext): DiscordContext {
  * Produce the compact stored transcript format that the upload API hashes and
  * the viewer hydrates.
  */
-export function buildStoredTranscript(input: TranscriptBuildInput): StoredTranscript {
+export function buildStoredTranscript(input: TranscriptBuildInput, options?: TranscriptCensorshipOptions): StoredTranscript {
 	const compactContext = selectCompactWebhookContext(input.messages, input.context);
 	const compactTranscript: StoredTranscript = {
 		messages: input.messages.map((message) => compactMessage(message, compactContext.users)),
 		context: sortTranscriptContext(compactContext)
 	};
+	const censoredTranscript = applyTranscriptCensorship(compactTranscript, options);
 
 	return (
-		(pruneForExport(compactTranscript) as StoredTranscript | undefined) ?? {
+		(pruneForExport(censoredTranscript) as StoredTranscript | undefined) ?? {
 			messages: []
 		}
 	);
