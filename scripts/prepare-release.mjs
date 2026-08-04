@@ -67,7 +67,11 @@ function jsrSpecifier(packageName, version) {
 	return `jsr:${packageName}@${version}`;
 }
 
-function rewriteJsrSourceImports(sourceDir, releaseVersion) {
+function escapeRegularExpression(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function rewriteJsrSourceImports(sourceDir, releaseVersion, externalDependencies) {
 	if (!existsSync(sourceDir)) {
 		return;
 	}
@@ -94,6 +98,13 @@ function rewriteJsrSourceImports(sourceDir, releaseVersion) {
 			/'@ticketpm\/([^']+)'/g,
 			(_, packageSlug) => `'${jsrSpecifier(`@ticketpm/${packageSlug}`, releaseVersion)}'`
 		);
+
+		// JSR generates documentation after upload. Explicit npm: specifiers keep
+		// package subpaths resolvable there even when the local dry run accepts them.
+		for (const [name, range] of Object.entries(externalDependencies)) {
+			const expression = new RegExp(`(["'])${escapeRegularExpression(name)}((?:/[^"']*)?)\\1`, "g");
+			source = source.replaceAll(expression, (_, quote, subpath = "") => `${quote}npm:${name}@${range}${subpath}${quote}`);
+		}
 		writeFileSync(entryPath, source);
 	}
 }
@@ -172,13 +183,6 @@ for (const pkg of packages) {
 
 	writeJson(path.join(npmTargetDir, "package.json"), npmManifest);
 
-	const jsrTargetDir = path.join(releaseDir, "jsr", pkg.slug);
-	mkdirSync(jsrTargetDir, { recursive: true });
-	copyIfPresent(path.join(pkg.dir, "src"), path.join(jsrTargetDir, "src"));
-	copyIfPresent(path.join(pkg.dir, "README.md"), path.join(jsrTargetDir, "README.md"));
-	copyIfPresent(path.join(rootDir, "LICENSE"), path.join(jsrTargetDir, "LICENSE"));
-	rewriteJsrSourceImports(path.join(jsrTargetDir, "src"), releaseVersion);
-
 	const jsrDependencies = Object.fromEntries(
 		Object.entries(pkg.manifest.dependencies ?? {}).filter(([name]) => !name.startsWith("@ticketpm/"))
 	);
@@ -192,18 +196,17 @@ for (const pkg of packages) {
 		jsrDependencies[name] = range;
 	}
 
-	const jsrImports = Object.fromEntries(
-		Object.entries(jsrDependencies).flatMap(([name, range]) => [
-			[name, `npm:${name}@${range}`],
-			[`${name}/`, `npm:${name}@${range}/`]
-		])
-	);
+	const jsrTargetDir = path.join(releaseDir, "jsr", pkg.slug);
+	mkdirSync(jsrTargetDir, { recursive: true });
+	copyIfPresent(path.join(pkg.dir, "src"), path.join(jsrTargetDir, "src"));
+	copyIfPresent(path.join(pkg.dir, "README.md"), path.join(jsrTargetDir, "README.md"));
+	copyIfPresent(path.join(rootDir, "LICENSE"), path.join(jsrTargetDir, "LICENSE"));
+	rewriteJsrSourceImports(path.join(jsrTargetDir, "src"), releaseVersion, jsrDependencies);
 
 	const jsrConfig = {
 		name: pkg.manifest.name,
 		version: releaseVersion,
-		exports: "./src/index.ts",
-		imports: Object.keys(jsrImports).length > 0 ? jsrImports : undefined
+		exports: "./src/index.ts"
 	};
 
 	writeJson(path.join(jsrTargetDir, "jsr.json"), jsrConfig);
