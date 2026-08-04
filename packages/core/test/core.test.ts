@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	buildStoredTranscript,
 	ComponentType,
+	type ContainerChildComponent,
 	collectTranscriptMediaUrls,
 	compressStoredTranscript,
 	type DiscordContext,
@@ -12,6 +13,7 @@ import {
 	MAX_TRANSCRIPT_CHANNEL_NAME_CHARACTERS,
 	MAX_TRANSCRIPT_COMPRESSED_BYTES,
 	MAX_TRANSCRIPT_NESTING_DEPTH,
+	type MessageTopLevelComponent,
 	proxyGuildIconInPlace,
 	proxyTranscriptAssetsInPlace,
 	proxyTranscriptAvatarsInPlace,
@@ -237,6 +239,47 @@ describe("@ticketpm/core", () => {
 		expect(JSON.stringify(transcript).toLowerCase()).not.toContain("secret");
 		expect(JSON.stringify(transcript).toLowerCase()).not.toContain("private");
 		expect(input.messages[0]?.content).toBe("SECRET and private");
+	});
+
+	it("preserves component types that are newer than the current type definitions", () => {
+		const futureTopLevelComponent: MessageTopLevelComponent = {
+			type: ComponentType.TextDisplay,
+			content: "future top-level component"
+		};
+		const futureContainerChild: ContainerChildComponent = {
+			type: ComponentType.TextDisplay,
+			content: "future container child"
+		};
+		Reflect.set(futureTopLevelComponent, "type", 1000);
+		Reflect.set(futureContainerChild, "type", 1001);
+
+		const transcript = buildStoredTranscript(
+			{
+				context: {},
+				messages: [
+					{
+						id: "m1",
+						content: "secret",
+						components: [
+							futureTopLevelComponent,
+							{
+								type: ComponentType.Container,
+								components: [futureContainerChild]
+							}
+						]
+					}
+				]
+			},
+			{ censoredWords: ["secret"] }
+		);
+		const components = transcript.messages[0]?.components;
+
+		expect(components?.[0]).toEqual(futureTopLevelComponent);
+		expect(components?.[1]?.type).toBe(ComponentType.Container);
+		if (components?.[1]?.type !== ComponentType.Container) {
+			throw new Error("Expected the second component to remain a container.");
+		}
+		expect(components[1].components[0]).toEqual(futureContainerChild);
 	});
 
 	it("uses Unicode characters for the seventy-percent masking calculation", () => {

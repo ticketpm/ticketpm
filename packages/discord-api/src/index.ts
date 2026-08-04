@@ -63,13 +63,17 @@ export interface DiscordApiTranscriptEnricher {
 	}) => Promise<readonly APIUser[]>;
 }
 
-export interface BuildEnrichedDiscordApiTranscriptOptions extends DiscordApiContextOptions, TranscriptCensorshipOptions {
+export interface BuildEnrichedDiscordApiTranscriptOptions extends DiscordApiContextOptions {
 	messages: readonly APIMessage[];
 	channelId: string;
 	guildId?: string;
 	guild?: GuildInfo;
 	enricher: DiscordApiTranscriptEnricher;
 }
+
+export interface CreateEnrichedDiscordApiTranscriptOptions
+	extends BuildEnrichedDiscordApiTranscriptOptions,
+		TranscriptCensorshipOptions {}
 
 type APIUserWithPrimaryGuild = APIUser & {
 	primary_guild?: APIUserPrimaryGuild | null;
@@ -696,7 +700,7 @@ export async function buildEnrichedDiscordApiTranscriptData(
  * Enrich, normalize, compact, and finalize a transcript in one call.
  */
 export async function createEnrichedDiscordApiTranscript(
-	options: BuildEnrichedDiscordApiTranscriptOptions
+	options: CreateEnrichedDiscordApiTranscriptOptions
 ): Promise<StoredTranscript> {
 	const data = await buildEnrichedDiscordApiTranscriptData(options);
 	return buildStoredTranscript(data, options);

@@ -23,9 +23,8 @@ const CENSOR_CHARACTER = "•";
 const MINIMUM_CENSORED_WORD_CHARACTERS = 3;
 
 interface CensorTerm {
-	characterLength: number;
+	expression: RegExp;
 	order: number;
-	value: string;
 }
 
 interface CensorMatch {
@@ -68,9 +67,10 @@ function normalizeCensorTerms(words: readonly string[] | undefined): CensorTerm[
 		const foldedValue = value.toLowerCase();
 		if (!termsByFoldedValue.has(foldedValue)) {
 			termsByFoldedValue.set(foldedValue, {
-				characterLength,
-				order,
-				value
+				// The lookahead discovers overlapping literal matches. Compiling it once
+				// avoids rebuilding the same expression for every censored text field.
+				expression: new RegExp(`(?=(${escapeRegularExpression(value)}))`, "giu"),
+				order
 			});
 		}
 	}
@@ -82,10 +82,7 @@ function findCensorMatches(value: string, terms: readonly CensorTerm[]): CensorM
 	const matches: CensorMatch[] = [];
 
 	for (const term of terms) {
-		// The lookahead discovers overlapping literal matches; selection below then
-		// keeps the longest match at a position without masking the same text twice.
-		const expression = new RegExp(`(?=(${escapeRegularExpression(term.value)}))`, "giu");
-		for (const match of value.matchAll(expression)) {
+		for (const match of value.matchAll(term.expression)) {
 			const matchedValue = match[1];
 			if (match.index === undefined || matchedValue === undefined) {
 				continue;
@@ -316,6 +313,9 @@ function censorContainerChild(
 		case ComponentType.Separator:
 		case ComponentType.File:
 			return component;
+		default:
+			// Runtime payloads can gain new Discord component types before our unions do.
+			return component;
 	}
 }
 
@@ -346,6 +346,9 @@ function censorTopLevelComponent(
 			return censorMediaGallery(component, path, terms, ranges);
 		case ComponentType.Separator:
 		case ComponentType.File:
+			return component;
+		default:
+			// Runtime payloads can gain new Discord component types before our unions do.
 			return component;
 	}
 }
